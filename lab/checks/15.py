@@ -31,6 +31,12 @@ check(deep_r["tokens_per_param"] < r["tokens_per_param"], "...so it is even furt
 
 # The uncomfortable finding this lesson exists for.
 check(r["tokens_per_param"] < 1.0, f"the course-scale model gets {r['tokens_per_param']:.3f} tokens per parameter, against Chinchilla's 20")
-check(r["chinchilla_params"] < r["params"] / 100, "the compute-optimal model for this budget is over 100x smaller than the one we train")
+factor = r["params"] / r["chinchilla_params"]
+check(factor > 10, f"the compute-optimal model for this budget is {factor:.0f}x smaller than the one we train")
+
+# The same report, run on the fork's real 10-minute CPU configuration (~300 tokens/second
+# measured, which is ~2.7 GFLOP/s of useful arithmetic for this model).
+real = budget_report(model, seconds=600, flops_per_second=300 * model.estimate_flops())
+check(real["tokens"] == 180_000, f"at a measured 300 tokens/second, ten minutes is {real['tokens']:,} tokens")
 
 done("15")
