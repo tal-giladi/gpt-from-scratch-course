@@ -1,0 +1,4 @@
+# Keep LF everywhere: the lab scripts run under Git Bash, and a CRLF shebang line
+# produces the classic ": command not found".
+* text=auto eol=lf
+*.png binary

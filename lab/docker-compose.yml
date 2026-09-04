@@ -1,0 +1,31 @@
+# The lab runs inside the image you already built for the autoresearch repo, so there is
+# no second torch install and no venv on the host. Three things are mounted:
+#   /lab            this directory (your exercises, the checks, the course library)
+#   /autoresearch   the repo under study, read-write so the capstone can run train.py
+#   the cache       the named volume holding the data shards and the trained tokenizer
+services:
+  lab:
+    image: autoresearch-cpu:latest
+    working_dir: /lab
+    shm_size: "1gb"
+    volumes:
+      - .:/lab
+      - ${AUTORESEARCH_DIR:-../../../autoresearch}:/autoresearch
+      - autoresearch_ar-cache:/root/.cache/autoresearch
+    environment:
+      PYTHONPATH: /autoresearch:/lab
+      PYTHONDONTWRITEBYTECODE: "1"
+      AR_REPO: /autoresearch
+      # The course works at one fixed toy scale so that every check is reproducible.
+      AR_MAX_SEQ_LEN: "256"
+      AR_DEVICE_BATCH_SIZE: "8"
+      AR_TOTAL_BATCH_SIZE: "2048"
+      AR_EVAL_TOKENS: "32768"
+      AR_UNTIMED_STEPS: "2"
+    command: ["python", "-c", "print('lab ready')"]
+
+volumes:
+  # Created by `docker compose up` in the autoresearch repo; the course never populates it
+  # itself, it only reads the shards and tokenizer that prepare.py put there.
+  autoresearch_ar-cache:
+    external: true
