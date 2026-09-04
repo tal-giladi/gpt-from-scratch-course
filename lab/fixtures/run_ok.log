@@ -1,0 +1,19 @@
+Device: cpu | dtype: torch.float32 | flash: False | compile: False
+Vocab size: 8,192
+Model config: {'sequence_len': 256, 'vocab_size': 8192, 'n_layer': 4, 'n_head': 4, 'n_kv_head': 4, 'n_embd': 256, 'window_pattern': 'SSSL'}
+Scaling AdamW LRs by 1/sqrt(256/768) = 1.732051
+Time budget: 120s
+Gradient accumulation steps: 4
+step 00000 (0.0%) | loss: 9.011596 | lrm: 1.00 | dt: 32351ms | tok/sec: 253 | mfu: 4.2% | epoch: 1 | remaining: 120s
+step 00014 (98.7%) | loss: 6.418211 | lrm: 0.03 | dt: 30112ms | tok/sec: 272 | mfu: 4.5% | epoch: 1 | remaining: 2s
+---
+val_bpb:          2.399582
+training_seconds: 150.9
+total_seconds:    565.5
+peak_vram_mb:     0.0
+mfu_percent:      4.54
+total_tokens_M:   0.1
+num_steps:        15
+num_params_M:     11.5
+depth:            4
+checkpoint:       model.pt

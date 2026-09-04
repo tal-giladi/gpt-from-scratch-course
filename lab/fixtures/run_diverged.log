@@ -1,0 +1,7 @@
+Device: cpu | dtype: torch.float32 | flash: False | compile: False
+Vocab size: 8,192
+Time budget: 120s
+Gradient accumulation steps: 4
+step 00000 (0.0%) | loss: 9.011596 | lrm: 1.00 | dt: 31002ms | tok/sec: 264 | mfu: 4.4% | epoch: 1 | remaining: 120s
+step 00001 (0.0%) | loss: 41.882130 | lrm: 1.00 | dt: 30551ms | tok/sec: 268 | mfu: 4.5% | epoch: 1 | remaining: 120s
+FAIL

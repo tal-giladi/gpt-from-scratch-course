@@ -1,0 +1,48 @@
+- [Home](/)
+- [Course Outline](curriculum/course-outline.md)
+- [Course Brief](brief/course-brief.md)
+- [Annotated train.py](assets/annotated-train.md)
+- [Glossary](assets/glossary.md)
+
+- **Module 1 — From text to tensors**
+  - [Module plan](curriculum/module-01-plan.md)
+  - [01 · Bytes, tokens, and a vocabulary of 8192](lessons/module-01/lesson-01.md)
+  - [02 · Packing documents into rectangles](lessons/module-01/lesson-02.md)
+  - [03 · What the model is actually asked to do](lessons/module-01/lesson-03.md)
+  - [Module 1 quiz](assessments/module-01-quiz.md)
+- **Module 2 — The residual stream and attention**
+  - [Module plan](curriculum/module-02-plan.md)
+  - [04 · Embeddings and the residual stream](lessons/module-02/lesson-01.md)
+  - [05 · Attention: queries, keys, values, and the mask](lessons/module-02/lesson-02.md)
+  - [06 · Rotary embeddings, and why RMS norm](lessons/module-02/lesson-03.md)
+  - [Module 2 quiz](assessments/module-02-quiz.md)
+- **Module 3 — The rest of the model**
+  - [Module plan](curriculum/module-03-plan.md)
+  - [07 · The MLP, the block, and the zero that makes training work](lessons/module-03/lesson-01.md)
+  - [08 · Assembling a GPT, and where the parameters went](lessons/module-03/lesson-02.md)
+  - [09 · From logits to text](lessons/module-03/lesson-03.md)
+  - [Module 3 quiz](assessments/module-03-quiz.md)
+- **Module 4 — Training**
+  - [Module plan](curriculum/module-04-plan.md)
+  - [10 · Loss, gradients, and what backward() actually does](lessons/module-04/lesson-01.md)
+  - [11 · Two optimizers in one model: AdamW and Muon](lessons/module-04/lesson-02.md)
+  - [12 · Schedules, the time budget, and faking a big batch](lessons/module-04/lesson-03.md)
+  - [Module 4 quiz](assessments/module-04-quiz.md)
+- **Module 5 — Measuring**
+  - [Module plan](curriculum/module-05-plan.md)
+  - [13 · val_bpb: the one number that decides everything](lessons/module-05/lesson-01.md)
+  - [14 · Reading the training log](lessons/module-05/lesson-02.md)
+  - [15 · What a fixed budget actually buys](lessons/module-05/lesson-03.md)
+  - [Module 5 quiz](assessments/module-05-quiz.md)
+- **Module 6 — Speed, and reading a port**
+  - [Module plan](curriculum/module-06-plan.md)
+  - [16 · Why it is slow: dtypes, kernels, and torch.compile](lessons/module-06/lesson-01.md)
+  - [17 · FlashAttention, and reading a port](lessons/module-06/lesson-02.md)
+  - [Module 6 quiz](assessments/module-06-quiz.md)
+- **Module 7 — Research**
+  - [Module plan](curriculum/module-07-plan.md)
+  - [18 · The autonomous research loop](lessons/module-07/lesson-01.md)
+  - [19 · Designing an experiment you can believe](lessons/module-07/lesson-02.md)
+  - [20 · Capstone: one honest experiment](lessons/module-07/lesson-03.md)
+  - [Module 7 quiz](assessments/module-07-quiz.md)
+- [Glossary](assets/glossary.md)
