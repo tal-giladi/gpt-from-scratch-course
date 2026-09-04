@@ -34,7 +34,14 @@ c_proj = model.transformer.h[0].mlp.c_proj.weight
 check(c_proj.abs().max().item() == 0.0, "mlp.c_proj is still exactly zero (it has not been updated)")
 check(c_proj.grad.abs().max().item() > 0.0, "...and it has a NON-zero gradient, so it will start learning immediately")
 
+# The other half of the same story: c_fc gets NO gradient on the very first step, because
+# the gradient reaching it has to pass back through the (still zero) c_proj.
 c_fc = model.transformer.h[0].mlp.c_fc.weight
-check(c_fc.grad.abs().max().item() > 0.0, "the up-projection has a gradient too")
+check(c_fc.grad.abs().max().item() == 0.0, "the up-projection gets exactly zero gradient while c_proj is zero")
+
+with torch.no_grad():
+    model.transformer.h[0].mlp.c_proj.weight.normal_(0, 0.02)
+grad_report(model, x, y)
+check(c_fc.grad.abs().max().item() > 0.0, "...and starts receiving one the moment c_proj is non-zero")
 
 done("10")

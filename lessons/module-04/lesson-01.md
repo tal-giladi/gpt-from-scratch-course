@@ -46,11 +46,20 @@ output is zero, so the layer contributes nothing. Does it get a gradient?
 
 Yes - and this is worth being sure about rather than believing. For `y = W @ h`, the
 gradient with respect to `W` is `grad_y @ h.T`. It depends on the *input activation* `h`,
-not on `W`. `h` is non-zero, so the gradient is non-zero, and the layer starts moving on
-the very first step. Initialising `c_fc` to zero instead would kill it: then `h` itself
-would be zero, and both gradients would vanish.
+not on `W`. `h` is non-zero, so the gradient is non-zero, and `c_proj` starts moving on the
+very first step.
 
-The check for this lesson asserts exactly that, on the real model.
+Now push on that same equation once more, because it has a second consequence that is easy
+to miss. The gradient flowing *backwards past* that layer is `W.T @ grad_y` - and `W` **is**
+zero. So on step 0, `c_fc` (the layer feeding `c_proj`) receives **exactly zero gradient**.
+The MLP's first layer does not move at all on the first step; it starts learning on step 1,
+once `c_proj` has become non-zero. The check for this lesson asserts both halves on the real
+model, and it is worth pausing on: "this weight has zero gradient" is normally a bug, and
+here it is by design and self-repairing after one step.
+
+That also explains why the zero goes on `c_proj` and not `c_fc`. Zero both and the whole
+sub-layer is permanently dead: `h` would be zero, so `c_proj`'s gradient (`grad_y @ h.T`)
+would be zero, so nothing would ever move. The asymmetry is the whole trick.
 
 ## Fast fail
 
