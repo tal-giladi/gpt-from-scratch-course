@@ -52,15 +52,148 @@ may only attend back to `i - window`.
 
 Why: attention costs `O(T^2)` per layer. If most layers only need local context - and
 empirically they do - you buy back a large slice of that cost and spend it on depth
-instead. The mask does the work:
+instead.
 
-    delta = i[:, None] - i[None, :]        # how far back each key is
-    mask = (delta >= 0) & (delta <= window)   # causal AND inside the window
+### A window does not make Q, K or V smaller
 
-`delta >= 0` is causality; `delta <= window` is the window. One boolean matrix expresses
-both, and that matrix is exactly what this fork's CPU port had to build by hand, because
-on a GPU the FlashAttention-3 kernel takes `causal=True, window_size=(w, 0)` and never
-materialises it (lesson 17).
+This is the first thing to get straight, because the name suggests otherwise. A
+short-window layer still projects **every** token:
+
+    q = self.c_q(x).view(B, T, self.n_head, self.head_dim)   # all T tokens
+    k = self.c_k(x).view(B, T, self.n_kv_head, self.head_dim)  # all T tokens
+    v = self.c_v(x).view(B, T, self.n_kv_head, self.head_dim)  # all T tokens
+
+`q`, `k` and `v` have exactly the same shapes in a `window = 8` layer as in a full-context
+one, and the score matrix is still `(B, n_head, T, T)`. Nothing is sliced away, and no
+token is dropped from the sequence.
+
+What the window restricts is only **which (query, key) pairs are allowed to interact**. It
+is a rule about pairs, not about tokens. Every token is still a query, and every token is
+still a key; the mask just says that query `i` may not read key `j` when `j` is more than
+`window` positions behind it.
+
+So where does the saving come from? Not from the code you are about to write — writing the
+full `T x T` score matrix and then `-inf`-ing most of it computes *everything* and throws
+most of it away. That version is correct and it is what the check compares against, but it
+saves nothing.
+
+The saving comes from a kernel that never computes the forbidden pairs in the first place.
+FlashAttention-3 takes `causal=True, window_size=(w, 0)` as arguments and works in tiles:
+for each block of queries it walks only the blocks of keys the window permits, and skips
+the rest entirely — no scores, no `-inf`, no softmax terms. The mask is never materialised
+as a tensor at all. That turns `O(T^2)` into roughly `O(T * w)`, which is the whole point
+(lesson 17 does this arithmetic properly, and shows how this fork's CPU fallback has to
+build the mask by hand because it has no such kernel).
+
+Two ways to say the same thing: masking is the *definition* of windowed attention; skipping
+is the *optimisation*. They must agree numerically, and they do — that is exactly what
+`bash lab/lab.sh check 05` proves.
+
+### Why `SSSL` and not all-long
+
+`SSSL` is a bet, not a theorem. The bet is that **most of what a language model does is
+local** — agreement, morphology, the current clause, the last few tokens of code — and that
+only some of it needs to reach across the whole context. So spend the cheap local layers
+freely and pay for the expensive global ones only every fourth layer.
+
+The objection people raise first is: surely the token I need is sometimes far away? Yes —
+and a short window does not prevent that, because **information propagates through depth**.
+A short window limits how far one *layer* can reach, not how far *information* can travel.
+
+With `window = w`, position `i` reads positions `i-w .. i`. But each of those positions has
+already, in the previous layer, read `w` positions behind *itself*. After two short layers
+the receptive field is `2w`; after three, `3w`. Information hops. It is the same reason a
+stack of 3x3 convolutions sees a large image: a small kernel applied repeatedly is not a
+small receptive field.
+
+What multi-hop propagation is bad at is moving information *unchanged* over a long distance
+— each hop mixes it with everything else at that position, so a specific token far back gets
+diluted. That is what the periodic `L` layer is for: one layer that can reach any position
+in a single hop, with no dilution, every fourth layer, plus the last layer forced to long so
+the final prediction always has global access.
+
+So the pattern is a trade with a name for each half: the `S` layers buy depth, and the `L`
+layers guarantee that the depth is not stuck talking to its neighbours.
+
+### The mask, one line at a time
+
+The mask is built from positions alone — it does not look at the data:
+
+    i = torch.arange(T)
+    delta = i[:, None] - i[None, :]
+    mask = (delta >= 0) & (delta <= window)
+
+Take `T = 4` and `window = 2`, so `i = [0, 1, 2, 3]`.
+
+`i[:, None]` is a **column** — the query index, varying down the rows:
+
+    [[0],
+     [1],
+     [2],
+     [3]]
+
+`i[None, :]` is a **row** — the key index, varying across the columns:
+
+    [[0, 1, 2, 3]]
+
+Subtracting broadcasts them into a `(4, 4)` matrix where `delta[i, j] = i - j`, "how many
+positions back key `j` is from query `i`":
+
+    delta =
+    [[ 0, -1, -2, -3],
+     [ 1,  0, -1, -2],
+     [ 2,  1,  0, -1],
+     [ 3,  2,  1,  0]]
+
+The diagonal is `0` (a position looking at itself), below it is positive (the past), above
+it is negative (the future).
+
+`delta >= 0` — **causality**. Negative means key `j` is in the future of query `i`:
+
+    [[ True, False, False, False],
+     [ True,  True, False, False],
+     [ True,  True,  True, False],
+     [ True,  True,  True,  True]]
+
+`delta <= window` — **locality**. With `window = 2`, anything more than 2 steps back is out.
+Note this condition says nothing about the future; it only trims the past:
+
+    [[ True,  True,  True,  True],
+     [ True,  True,  True,  True],
+     [ True,  True,  True,  True],
+     [False,  True,  True,  True]]
+
+`&` — **both at once**, which is the band you actually want:
+
+    mask = (delta >= 0) & (delta <= window) =
+    [[ True, False, False, False],
+     [ True,  True, False, False],
+     [ True,  True,  True, False],
+     [False,  True,  True,  True]]
+
+Read the last row: query 3 may attend to keys 1, 2 and 3, but not to key 0 — it is 3 steps
+back and the window is 2. Read the first row: query 0 may only attend to itself. Everything
+lives in a diagonal band `window + 1` wide, and `window >= T` widens the band until it is
+the plain causal triangle again — which is why no special case is needed for the `L` layers.
+
+**A warning about the name.** In this matrix `True` means **allowed**, and `False` means
+blocked. That is the opposite of what "mask" usually suggests, and it is the opposite
+polarity from what `masked_fill` wants — `masked_fill` fills where the argument is `True`.
+So the call has to invert it:
+
+    scores = scores.masked_fill(~mask, float("-inf"))
+
+You can avoid the `~` by building the complement instead, and then the variable name is
+honest:
+
+    masked = (delta < 0) | (delta > window)     # True = forbidden
+    scores = scores.masked_fill(masked, float("-inf"))
+
+Both are correct and they are exact negations of each other (De Morgan: `~(a & b)` is
+`~a | ~b`). Pick one, name it for what `True` means — `allowed` or `masked` — and check the
+polarity at the `masked_fill` call. Getting it backwards masks the *legal* positions, which
+does not crash; it gives you rows of all-`-inf`, `NaN`s out of the softmax, and a loss that
+is `nan` from step 1.
 
 ## Two upstream twists
 
@@ -138,8 +271,9 @@ one of two failures:
 - `i - j < 0` — key `j` is in the **future**. Causality forbids it.
 - `i - j > window` — key `j` is real but **too far back** for this layer's window.
 
-So build `delta = i - j` for every pair and turn the rule into a boolean matrix. You can
-express it either way round; just be clear which one you built:
+Building `delta` and turning that rule into a boolean matrix is worked through element by
+element in "The mask, one line at a time" above. You can express it either way round;
+just be clear which one you built:
 
     i = torch.arange(T, device=q.device)
     delta = i[:, None] - i[None, :]
