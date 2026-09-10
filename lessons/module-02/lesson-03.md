@@ -89,7 +89,9 @@ attention (lesson 05).
        model.cos[0, :4, 0, :4]              # angles at the first four positions
        model.cos[0, :4, 0, -1]              # the slowest pair barely moves
 
-       x = torch.randn(1, 6, 2, 8)
+       H = model.config.n_head              # 2 at the course's toy scale
+       D = model.config.n_embd // H         # head_dim = 64, so cos/sin are (..., 32)
+       x = torch.randn(1, 6, H, D)          # x's head_dim must match the model's
        cos, sin = model.cos[:, :6], model.sin[:, :6]
        r = defs.apply_rotary_emb(x, cos, sin)
        x.norm(dim=-1), r.norm(dim=-1)       # rotation preserves length
@@ -105,7 +107,9 @@ attention (lesson 05).
 - `d = x.shape[-1] // 2`, then `x1 = x[..., :d]`, `x2 = x[..., d:]`. Concatenate along the
   last dimension (`dim=-1`, which for a 4-D tensor is the same `3` the repo writes).
 - `cos` and `sin` arrive shaped `(1, T, 1, d)` and broadcast against `(B, T, H, d)` on
-  their own - no reshaping needed.
+  their own - no reshaping needed. Their last dimension is `head_dim // 2`, so `x`'s
+  `head_dim` has to be the model's: build test tensors from `model.config`, not from a
+  number you picked, or you get "size of tensor a (4) must match tensor b (32)".
 - Get the signs right: `y1 = x1*cos + x2*sin`, `y2 = -x1*sin + x2*cos`. Flipping them
   rotates the other way; the check compares against the repo and will catch it.
 - `rms_norm`: `x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + eps)` with a small `eps`
