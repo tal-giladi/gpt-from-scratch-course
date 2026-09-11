@@ -23,7 +23,9 @@ answer, and when would `-inf` actually produce a NaN?
 too.
 
 **6.** RMS norm here has no learned gain (`F.rms_norm(x, (x.size(-1),))` with no weight).
-Argue that this loses nothing, given what follows every call to `norm` in this model.
+Show with an explicit 2-channel example why a gain in front of a bias-free linear layer
+adds no expressive power. Then say whether the same argument covers `norm(q)` and `norm(k)`,
+which do **not** feed a linear layer.
 
 ---
 
@@ -64,8 +66,45 @@ Rotating `v` would rotate the retrieved content itself, so the same information 
 back differently depending on where it was found - the model would have to learn to undo a
 position-dependent rotation before it could use anything it retrieved.
 
-**6.** Every call to `norm` is immediately followed by a linear layer with no bias -
-`norm(x)` feeds `attn`'s `c_q`/`c_k`/`c_v` or the MLP's `c_fc`, and `norm(q)`/`norm(k)` feed
-a dot product that is then scaled. A per-channel learned gain applied before a linear map is
-equivalent to scaling that linear map's columns, which the linear layer can learn directly.
-So the gain is redundant parameters and one more kernel, and dropping it costs nothing.
+**6.** A learned gain is a per-channel multiplier applied after the normalisation:
+
+    y = rms_norm(x) * g
+
+which is the same as multiplying by a diagonal matrix `G = diag(g)`, so `y = G x` writing
+`x` for the already-normalised vector. The next layer is a bias-free linear map:
+
+    z = W y = W (G x) = (W G) x
+
+`W G` is just `W` with its **columns** rescaled: column `i` of `W` multiplied by `g[i]`. It
+is another weight matrix of exactly the same shape, and `W` is free to be learned, so
+whatever `G` could have contributed, `W` can express on its own.
+
+*The 2-channel example.* Normalised input `x = [2, 3]`, learned gain `g = [10, 5]`, and a
+next layer that computes `z = 2*x1 + 3*x2`, i.e. `W = [2, 3]`.
+
+    with the gain:      G x = [20, 15]        z = 2*20  + 3*15  = 40 + 45 = 85
+    without the gain:   W G = [20, 15]        z = 20*2  + 15*3  = 40 + 45 = 85
+
+Identical, and not by coincidence — scaling input channel `i` by `g[i]` and scaling column
+`i` of `W` by `g[i]` are the same multiplication, done in the other order.
+
+The intuition: the gain lets the norm scale each input channel independently, but the linear
+layer *already* holds an independent weight for every input channel. It can learn the same
+scaling itself, for free, as part of weights it was going to learn anyway. So wherever
+`norm(x)` feeds `c_q`, `c_k`, `c_v` or `c_fc`, a learned gain is extra parameters and an
+extra kernel buying nothing.
+
+*The subtlety.* This argument is about a gain that is immediately followed by a **free
+linear map**. It does **not** generalise to "a gain before any dot product is redundant",
+and in particular it does not cover this model's QK norm, where `norm(q)` and `norm(k)` feed
+each other:
+
+    score = (G q) · (G k) = sum_i g[i]^2 * q[i] * k[i]
+
+There is no free weight matrix downstream to absorb `G` into - the next operation is a
+bilinear product of two *normalised* vectors, then a scalar `1/sqrt(head_dim)`. Nor can it
+be pushed upstream into `c_q`/`c_k`, because `rms_norm` sits in between and is non-linear:
+rescaling a channel before the norm also changes the root-mean-square that divides it, so
+the two do not commute. A gain there would be a genuine extra degree of freedom - a learned
+diagonal metric weighting which channels matter in the attention score. The repo omits it
+for simplicity and stability, not because it would be redundant.
