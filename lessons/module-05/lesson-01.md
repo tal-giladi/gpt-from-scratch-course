@@ -1,13 +1,62 @@
 # 13 - val_bpb: the one number that decides everything
 
-Every experiment in this repo is judged by a single scalar printed at the end of a run:
+Every run of `train.py` ends with a short summary. This is one from the course's own capstone
+runs:
 
-    val_bpb:          2.399582
+    val_bpb:          2.607440
+    training_seconds: 126.0
+    num_steps:        16
+    num_params_M:     11.5
 
-Everything else in the summary - tokens, steps, MFU, parameters - is context. `val_bpb` is
-the score, and the autonomous loop in `program.md` keeps a change if and only if this number
-went down. So it is worth understanding exactly what it measures, and exactly which parts of
-it are not allowed to move.
+Everything in that summary except the first line is context. **`val_bpb` is the score.** The
+autonomous research loop in `program.md` keeps a code change if and only if this number went
+down. So it is worth knowing exactly what it measures, and why part of the code that computes
+it is fenced off with "do not change".
+
+## What "bits per byte" means
+
+Start with the name, read backwards.
+
+**Per byte.** Text on disk is bytes. The word `cat` is 3 bytes; `café` is 5 (the `é` takes two
+in UTF-8).
+
+**Bits.** A bit is the unit of "how surprised were you". If the model gives the correct next
+piece of text probability `1/2`, predicting it took 1 bit; probability `1/4` is 2 bits;
+probability `1/8192` is 13 bits. In general, `bits = -log2(probability)`.
+
+So **bits per byte** is: on average, how many bits of surprise the model needs for each byte of
+real text it has never seen. It is literally a compression rate - a model with `val_bpb = 2.0`
+could be used to compress this text to 2 bits per byte, a quarter of its original 8. Lower is
+better.
+
+**Val** means it is measured on the validation set: text held back from training, so the model
+cannot just have memorised it.
+
+### Why bytes and not tokens?
+
+Because tokens depend on the tokenizer, and bytes do not. Suppose the word `running` (7 bytes)
+is scored by two models with different tokenizers:
+
+    tokenizer A:  "running"         1 token,  loss 3.0 nats
+    tokenizer B:  "run" + "ning"    2 tokens, loss 1.5 + 1.5 nats
+
+Per **token**, A looks twice as bad (3.0 vs 1.5). Per **byte**, both spent 3.0 nats on 7 bytes:
+identical. Dividing by bytes means a change to the vocabulary cannot fake an improvement.
+
+### From the model's loss to bits per byte
+
+The model's loss is cross-entropy in **nats** (natural log) per token. Converting is two steps:
+nats to bits is dividing by `ln(2) = 0.693`, and then divide by bytes. On four target tokens:
+
+    target     bytes    loss (nats)
+    "The"        3         2.0
+    " cat"       4         3.0
+    <BOS>        0         1.5         special token - excluded
+    " sat"       4         2.5
+
+    total nats  = 2.0 + 3.0 + 2.5  = 7.5         (BOS left out)
+    total bytes = 3 + 4 + 4        = 11
+    val_bpb     = 7.5 / (0.693 * 11) = 0.984
 
 ## The code, line by line
 
@@ -27,58 +76,105 @@ it are not allowed to move.
             total_bytes += nbytes.sum().item()
         return total_nats / (math.log(2) * total_bytes)
 
-- **`reduction='none'`** returns the loss for every position separately instead of a mean.
-  That is the whole reason the model's `forward` takes a `reduction` argument at all.
-- **`token_bytes`** is a lookup table built by `prepare.py`: for each of the 8192 vocabulary
-  entries, how many UTF-8 bytes it decodes to. Special tokens decode to nothing, so they
-  get 0.
-- **`mask = nbytes > 0`** drops those special tokens from the numerator, and they
-  contribute 0 to the denominator automatically. You do not get credit for predicting a
-  marker you inserted yourself.
-- **Sum, then divide.** Not a mean of per-batch bpb values. A batch that happens to contain
-  longer tokens covers more bytes and must weigh more.
+It is the worked example above, in batches.
+
+- **`@torch.no_grad()`** - this is measurement, not training, so do not record anything for a
+  backward pass.
+- **`steps = EVAL_TOKENS // (batch_size * MAX_SEQ_LEN)`** - how many batches to score. On this
+  fork: `32,768 // (8 * 256) = 16` batches.
+- **`reduction='none'`** - normally the model returns one averaged loss. This asks for **one loss
+  per position**, shape `(B, T)`, so each can be matched to its own byte count. It is the whole
+  reason `GPT.forward` has a `reduction` argument.
+- **`.view(-1)`** - flatten `(8, 256)` into one list of 2,048 numbers, for both the losses and
+  the targets, so position `i` in one lines up with position `i` in the other.
+- **`token_bytes[y_flat]`** - `token_bytes` is a table built by `prepare.py` with one entry per
+  vocabulary id: how many bytes that token decodes to. Indexing it with 2,048 target ids gives
+  2,048 byte counts.
+- **`mask = nbytes > 0`** - the four special tokens (ids 8188-8191, one of which is the BOS
+  marker put at the start of every document) decode to no text at all, so they have 0 bytes.
+  Multiplying the losses by the mask drops their nats from the numerator; their 0 bytes already
+  add nothing to the denominator. You get no credit for predicting a marker the data pipeline
+  inserted itself.
+- **Sum everything, divide once at the end.**
+
+### Why sum-then-divide, not average the batches?
+
+Two batches, very different sizes in bytes:
+
+    batch 1:   10 nats over   5 bytes      2.0 nats per byte
+    batch 2:  100 nats over 100 bytes      1.0 nats per byte
+
+    average of the two ratios:   (2.0 + 1.0) / 2   = 1.5      wrong
+    sum then divide:             110 / 105         = 1.048    right
+
+Batch 1 covers 5 bytes and batch 2 covers 100. They should not get an equal vote. Summing first
+gives every byte the same weight, wherever it happens to fall.
 
 ## The pinned validation shard
 
+The dataset is split into files called shards. `prepare.py` fixes one of them as the validation
+set, forever:
+
     MAX_SHARD = 6542
-    VAL_SHARD = MAX_SHARD            # always the last one
+    VAL_SHARD = MAX_SHARD            # always the last one: shard_06542.parquet
+
     if split == "train":
         parquet_paths = [p for p in parquet_paths if p != val_path]
 
-One specific shard is the validation set, always, and it is excluded from training no
-matter how many shards you download. That is the entire defence against the single most
-common way to fool yourself in ML: measuring on data you trained on.
+However many shards you download for training, the last one is always fetched, and always
+removed from the training list. That is the entire defence against the most common way to fool
+yourself in machine learning: **measuring on data you trained on**. A model that has seen the
+test text gets a score for memory, not for understanding.
 
-It is worth seeing how cheap that defence is - three lines - and how completely it depends
-on nobody "improving" the dataloader in a way that lets the val shard leak into training.
-An autonomous agent editing `train.py` is one careless glob away from it, which is why the
-eval is fenced off in a file the agent is told not to touch.
+Notice how cheap that defence is - three lines - and how easy it is to break. An autonomous agent
+editing the data loading code is one careless file pattern away from letting the validation
+shard leak into training, and every score after that is fiction. That is why the evaluation lives
+in `prepare.py`, which the agent is told never to touch.
 
 ## Why "do not change this" is written on it
 
-`prepare.py` marks the section: `# Evaluation (DO NOT CHANGE - this is the fixed metric)`.
+`prepare.py` labels the section `# Evaluation (DO NOT CHANGE - this is the fixed metric)`.
 
-A number that the experimenter is free to redefine is not a metric, it is an opinion. Fewer
-eval tokens, a different shard, a shorter context, dropping the special-token mask - each
-would move `val_bpb` without moving the model's quality. Then two experiments run a week
-apart are not comparable, and the whole loop degenerates into optimising the measurement.
+A number the experimenter is free to redefine is not a metric; it is an opinion. Each of these
+would lower `val_bpb` without making the model one bit better:
 
-The one legitimate exception is a **whole-fork** change, made once, deliberately, and
-declared - which is exactly what the CPU port did: `EVAL_TOKENS` drops from 21M to 32,768
-and `MAX_SEQ_LEN` from 2048 to 256, so numbers from this fork are internally comparable but
-must never be compared to upstream's. Say it out loud, or it becomes a lie by omission.
+- score fewer tokens (the easy ones happen to come first)
+- use a different shard
+- use a shorter context, or skip the special-token mask
+
+After any of those, a run from today and a run from last week are no longer comparable, and the
+research loop quietly turns into optimising the measurement instead of the model.
+
+The one legitimate exception is a **whole-fork** change - made once, on purpose, and announced.
+That is exactly what this CPU port did: `EVAL_TOKENS` goes from about 21 million to 32,768 and
+`MAX_SEQ_LEN` from 2,048 to 256. Numbers from this fork are comparable with each other, and must
+never be compared with upstream's. Saying so out loud is what keeps it honest.
 
 ## What the numbers mean
 
-- `val_bpb ≈ 3.4` - an untrained model at this vocabulary (it is `ln(8192)/ln(2)` spread
-  over the ~3.8 bytes an average token covers).
-- `val_bpb ≈ 2.4` - what ten CPU-minutes buys. Real, and bad.
-- `val_bpb ≈ 1.0` - roughly gzip on English text.
-- `val_bpb ≈ 0.6-0.8` - a good small model on the same kind of data.
+Measured on this fork's own 16 validation batches:
 
-Each 0.1 of bpb is a real difference in compression. Noise between two identical runs at
-this scale is on the order of 0.01-0.02, which is the number lesson 19 turns into a rule
-about what counts as an improvement.
+    3.35    an untrained model
+    3.29    gzip -9, on the same text
+    3.01    xz -9
+    2.87    bzip2 -9
+    ~2.6    a 2-minute CPU training run (the capstone logs)
+    ~1.0    upstream's 5-minute H100 run, on its own settings (program.md's example: 0.9979)
+
+A few things to take from that:
+
+- **The untrained number is predictable.** A uniform guess over 8,192 tokens costs
+  `log2(8192) = 13` bits per token. On this text the average token covers 3.88 bytes, and
+  `13 / 3.88 = 3.35`. That is the starting line for every run.
+- **A random model is about as good as gzip.** Which says less about the model than about gzip:
+  general-purpose compressors are poor at English. A couple of minutes of training already beats
+  all three.
+- **Upstream's number is not comparable** to any of the others - different eval size, context and
+  budget, as above. It is here only to show where serious hardware gets to.
+
+Each 0.1 is a real difference in compression. The course's two identical baseline runs landed at
+`2.6074` and `2.6124` - a gap of 0.005 from randomness alone, and on other seeds and machines it
+is often larger. Lesson 19 turns that into a rule about what counts as an improvement.
 
 ## Do this
 
@@ -86,16 +182,19 @@ about what counts as an improvement.
 
        bash lab/lab.sh shell
 
-       import torch
+       import math, torch
        from prepare import get_token_bytes, evaluate_bpb, MAX_SEQ_LEN, EVAL_TOKENS
        from lib.common import build_model, tokenizer
        tb = get_token_bytes(); tb.shape, tb.dtype
-       (tb == 0).nonzero().flatten()            # the four special tokens
-       tb.float().mean()                         # average bytes per token
-       MAX_SEQ_LEN, EVAL_TOKENS                  # what the fork pinned them to
+       (tb == 0).nonzero().flatten()            # the four special tokens: 8188..8191
+       MAX_SEQ_LEN, EVAL_TOKENS                  # 256, 32768 - what the fork pinned them to
+       EVAL_TOKENS // (8 * MAX_SEQ_LEN)          # 16 batches
+
+       7.5 / (math.log(2) * 11)                  # the worked example: 0.984
 
        model = build_model()
-       evaluate_bpb(model, tokenizer(), 8)       # ~3.4 for an untrained model
+       evaluate_bpb(model, tokenizer(), 8)       # ~3.35 for an untrained model
+       math.log2(8192) / 3.88                    # ...and where that comes from
 
 2. Fill in `lab/exercises/lesson_13.py`: `bpb_over_batches(model, batches, token_bytes)`.
 
@@ -109,14 +208,15 @@ about what counts as an improvement.
 ## Hints
 
 - `model(x, y, reduction="none")` returns a loss per position, shaped like `y`. Flatten
-  both with `.view(-1)` so the byte lookup lines up.
-- `token_bytes[y_flat]` is a gather: one byte-count per target token.
-- Multiply the per-token losses by the mask (or index with it) before summing - do not
-  forget that masked-out positions must not contribute nats.
-- Accumulate Python floats/ints across batches (`.item()`), not tensors, or you will hold
-  the graph for the whole eval.
+  both with `.view(-1)` so the byte lookup lines up position by position.
+- `token_bytes[y_flat]` looks up one byte count per target token.
+- Multiply the per-token losses by the mask (or index with it) before summing - masked-out
+  positions must not contribute nats.
+- Accumulate Python numbers across batches with `.item()`, not tensors. Adding tensors keeps
+  every batch's intermediate results alive until the end.
 - Run under `torch.no_grad()`.
-- Divide **once**, at the end.
+- Divide **once**, at the end. If there were no bytes at all (the check tries a batch of nothing
+  but special tokens), return `float("inf")` instead of dividing by zero.
 
 ## Solution
 
@@ -138,7 +238,9 @@ about what counts as an improvement.
 
 ## Summary
 
-`val_bpb` is a summed, byte-weighted, special-token-masked cross-entropy on one pinned
-shard the model never trains on - and it is deliberately frozen, because a metric the
-experimenter can edit is not a metric. Next: the other numbers in the log, and what they
-tell you about where your time went.
+`val_bpb` is how many bits the model needs, on average, to encode each byte of text it has never
+seen - a compression rate, and a tokenizer-proof one because it divides by bytes, not tokens. It
+sums nats over every scored token (special tokens excluded), sums bytes, and divides once, on a
+validation shard that is pinned and never trained on. It is frozen on purpose, because a metric
+the experimenter can edit is not a metric. Next: the other numbers in the log, and what they tell
+you about where your time went.
