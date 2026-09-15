@@ -4,9 +4,10 @@ Six questions. Answers and explanations at the bottom - try all six first.
 
 ---
 
-**1.** Your machine does 30 GFLOP/s on a large fp32 matmul, but the training step achieves
-9 GFLOP/s of useful arithmetic. Name three distinct causes of the gap and say which one
-`torch.compile` addresses.
+**1.** Your machine does ~150 GFLOP/s on a large fp32 matmul, but a training step achieves only
+~9 GFLOP/s of useful arithmetic. After setting `OMP_NUM_THREADS=8` it achieves ~52. Name the
+distinct causes of the remaining gap to 150, say which one the thread change addressed, and
+which one `torch.compile` would address.
 
 **2.** A colleague sets `AR_BF16=1` on your CPU to "speed things up." Predict the result and
 say how you would settle the argument in 30 seconds.
@@ -29,18 +30,22 @@ calls? For one judgement call, describe the experiment that would settle it.
 
 ## Answers
 
-**1.** (a) **Small matrices**: at `n_embd = 256` each matmul is a fraction of a GFLOP, and
-the fixed per-operation overhead does not shrink with it. (b) **Memory-bound elementwise
-ops**: RMS norm, the residual adds, ReLU², rotary - each reads and writes a whole activation
-tensor to do very little arithmetic. (c) **Eager-mode dispatch**: every one of those is a
-separate operator call and kernel launch. `torch.compile` addresses (b) and (c) together, by
-fusing chains of elementwise ops into single passes over memory - it does not make the
-matmuls faster.
+**1.** (a) **Thread overhead**: every operation is split across all worker threads and waits for
+the slowest. With 16 threads on this laptop that cost swamped the many small operations - that is
+the 9 -> 52 jump, and it is what `OMP_NUM_THREADS` addressed. (b) **Small matrices**: at
+`n_embd = 256` each matmul is a fraction of a GFLOP, and its fixed launch cost does not shrink
+with it. (c) **Memory-bound elementwise ops**: RMS norm, the residual adds, ReLU², rotary - each
+reads and writes a whole activation tensor to do very little arithmetic. (d) **Eager-mode
+dispatch**: every one of those is a separate operator call and kernel launch. `torch.compile`
+addresses (c) and (d) together, by fusing chains of elementwise ops into single passes over
+memory - it does not make the matmuls faster.
 
-**2.** Prediction: it will be *slower*, because most x86 CPUs have no bf16 matmul instruction
-(you need AVX512-BF16 or AMX) and PyTorch emulates it by converting to fp32 and back. Settle
-it by running the lesson-16 benchmark for both dtypes: on this machine bf16 measures about
-0.78x of fp32. Measure, do not argue.
+**2.** Prediction: no faster, and possibly slower. A CPU only gains from bf16 if it has
+instructions for 16-bit float maths (AVX512-BF16 or AMX, on some Intel server chips); this
+laptop has neither. You also lose precision (`1.001` is stored as `1.0`). Settle it by running
+the lesson-16 benchmark for both dtypes. Measured here at 8 threads: 2.7x *slower* on a 64x64
+matmul, and the same speed at 256x256 and 1024x1024. No win anywhere, a big loss on small
+matrices. Measure, do not argue.
 
 **3.** Because those functions are wrapped in `@torch.compile(fullgraph=True)`. A Python
 float is baked into the traced graph as a constant, so a value that changes every step (the
@@ -55,18 +60,23 @@ running maximum and a running normalisation term so that partial results can be 
 exactly as more blocks arrive. The FLOP count is essentially unchanged; the **memory traffic**
 drops from `O(T^2)` to `O(T)`, and memory traffic was the bottleneck.
 
-**5.** `is_causal=True` is a flag, so SDPA can dispatch to a fused implementation that knows
-the mask's structure and never materialises it - it simply does not compute the upper
-triangle. An explicit `attn_mask` is opaque data, so SDPA falls back to its general math
-kernel, which builds the full `(B, H, T, T)` score tensor and applies the mask to it. So in
-the windowed case the port pays exactly the `O(T^2)` memory cost FlashAttention exists to
-avoid - which means a sliding window, a pure saving on GPU, becomes a cost on CPU.
+**5.** `is_causal=True` is a flag: SDPA knows the mask's shape without being handed one, and its
+kernel needs no mask tensor at all. An explicit `attn_mask` is data the kernel has to carry
+around. On PyTorch 2.9.1 on CPU, both calls still use the same CPU flash-style kernel
+(`_scaled_dot_product_flash_attention_for_cpu`), so neither builds the full `(B, H, T, T)` score
+tensor - but the masked call cost about ten times the extra memory of the causal one (179 MB vs
+16 MB at `T = 4096`), and it computes every pair and then masks, so a shorter window saves no
+compute (17 ms vs 14 ms at `T = 256`). On a GPU, FlashAttention-3's `window_size` skips
+out-of-window tiles and the window is a pure saving; on this port it is a small cost. (Older
+PyTorch versions fell back to the plain math kernel whenever a mask was passed, and materialised
+the full score tensor - the naive version measured 1,072 MB.)
 
-**6.** Forced: FlashAttention (no CPU build exists) and the eval budget (21M eval tokens
-would take longer than the training run). Judgement calls: bf16 (measured, and the right
-call), `torch.compile` (a toolchain in the image would change the answer), and batch size
-(2048 tokens per step is a very noisy gradient - it was chosen to get more optimizer steps
-into the budget). Settling the `torch.compile` one: add `g++` to the image, run the same
-protocol twice with `AR_COMPILE=0` and `AR_COMPILE=1`, equal time budgets, and compare
-`val_bpb` - the compile warm-up is paid out of the budget, so the comparison is fair by
-construction.
+**6.** Forced: FlashAttention (no CPU build exists); the eval budget (21M eval tokens would take
+longer than the training run); and 524K-token batches (at ~1,650 tok/s one such step would take
+over five minutes, so a 2-minute run could not finish a single step). Judgement calls: bf16
+(measured, and the right call), `torch.compile` (a toolchain in the image would change the
+answer), and the *specific* small batch that replaced 524K - 2,048 tokens is a very noisy
+gradient, chosen to get more optimizer steps into the budget. Settling the `torch.compile` one:
+add `g++` to the image, run the same protocol twice with `AR_COMPILE=0` and `AR_COMPILE=1`, equal
+time budgets, and compare `val_bpb` - the compile warm-up is paid out of the budget, so the
+comparison is fair by construction.

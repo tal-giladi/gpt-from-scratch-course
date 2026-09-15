@@ -63,8 +63,10 @@ it receives a much larger accumulated update per step and needs a correspondingl
 learning rate. Same shape, opposite sparsity.
 
 **6.** `2**19 / (8 * 256) = 256` micro-batches per step. Without the division, the summed
-gradient is 256x too large. Symptom: the loss spikes or goes to `NaN` almost immediately and
-the fast-fail (`train_loss_f > 100`) fires - or, with a small enough learning rate, the loss
-just plateaus high and erratically. The tempting wrong conclusion is "this learning rate is
-too high, let me lower it 256x", which papers over the bug and leaves a model that trains
-with a badly mis-scaled effective batch.
+gradient is 256x too large - and in *this* repo you would see almost nothing in the log. AdamW
+divides each gradient by its own running size and Muon rescales the gradient to a fixed norm
+before orthogonalising, so a constant factor on every gradient mostly cancels: the loss curve
+looks normal. That is exactly what makes it dangerous. The mistaken conclusion is "the division
+does not matter" - which stays true only until someone swaps in plain SGD (the effective learning
+rate jumps 256x and the fast-fail fires), adds gradient clipping (every step gets clipped), or
+logs and compares gradient norms (all 256x off). The bug is silent here, not harmless.
