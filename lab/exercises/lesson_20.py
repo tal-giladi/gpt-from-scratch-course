@@ -1,10 +1,9 @@
 # Lesson 20 - Capstone: one honest experiment
 # Read lessons/module-07/lesson-03.md, run the three experiments, then fill this in.
 #
-#   bash lab/lab.sh shell
-#   python tools/run_experiment.py baseline
-#   python tools/run_experiment.py baseline2
-#   python tools/run_experiment.py variant AR_DEPTH=2
+#   bash lab/lab.sh experiment baseline
+#   bash lab/lab.sh experiment baseline2
+#   bash lab/lab.sh experiment variant AR_DEPTH=2
 
 
 def capstone_report() -> dict:
