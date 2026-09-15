@@ -22,6 +22,9 @@ services:
       AR_TOTAL_BATCH_SIZE: "2048"
       AR_EVAL_TOKENS: "32768"
       AR_UNTIMED_STEPS: "2"
+      # PyTorch defaults to one thread per logical CPU; on the machine this course was written
+      # on that made every step ~8x slower than 8 threads (lesson 16 measures it).
+      OMP_NUM_THREADS: "8"
     command: ["python", "-c", "print('lab ready')"]
 
 volumes:

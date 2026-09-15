@@ -36,8 +36,8 @@ improvements to real training stacks are actually scored.
 **One wrinkle the CPU fork had to fix.** The first few steps are not counted against the timer
 (`UNTIMED_STEPS`). Upstream that is 10 steps, because on a GPU the first steps are
 `torch.compile` warming up, and it would be unfair to bill that to training. On a CPU with
-compile off there is no warm-up to excuse - and at ~8 seconds per step, 10 free steps would be
-over a minute of uncounted training. The fork drops it to 2.
+compile off there is no warm-up to excuse - and at ~1.2 seconds per step, 10 free steps would be
+12 seconds of uncounted training, a tenth of a 2-minute capstone run. The fork drops it to 2.
 
 ## The learning-rate schedule: flat, then down to zero
 
@@ -101,9 +101,10 @@ a rule.
 
 This one is counted in **steps**, not time, because it is about how many gradients the momentum
 buffer has seen, not about the clock. Early on, a lower momentum lets the buffer adapt quickly;
-later, higher momentum smooths more. On the CPU, at roughly 8 seconds a step, a 600-second run
-is only about 75 steps - so momentum only reaches about `0.875`. It never finishes warming up.
-That is one of the quiet ways a laptop run differs from the real thing.
+later, higher momentum smooths more. On the CPU, at roughly 1.2 seconds a step, a 600-second run
+is about 500 steps, so momentum finishes warming up around the 6-minute mark. The 2-minute
+capstone runs are only ~100 steps, and there momentum only reaches about `0.883` - it never
+finishes warming up. That is one of the quiet ways a laptop run differs from the real thing.
 
 **Weight decay** goes *down* in a straight line as the run progresses:
 
@@ -178,8 +179,8 @@ and far noisier. That is another honest cost of training on a laptop.
        [round(lrm(i / 10, final=0.1), 3) for i in range(11)]
        # the same shape, ending at 0.1
 
-       [round((1 - min(s / 300, 1)) * 0.85 + min(s / 300, 1) * 0.95, 3) for s in (0, 75, 150, 300, 600)]
-       # [0.85, 0.875, 0.9, 0.95, 0.95] - where a 75-step CPU run stops
+       [round((1 - min(s / 300, 1)) * 0.85 + min(s / 300, 1) * 0.95, 3) for s in (0, 100, 150, 300, 600)]
+       # [0.85, 0.883, 0.9, 0.95, 0.95] - a 2-minute capstone run stops near 100
 
    And the accumulation bug, measured:
 

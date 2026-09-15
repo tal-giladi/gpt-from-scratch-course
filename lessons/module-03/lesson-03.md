@@ -157,7 +157,7 @@ is often the same phrase again, and greedy decoding has no randomness to escape 
 That is why this fork saves `model.pt` at the end of a run and ships `sample.py`, which does
 exactly the loop above with temperature `0.9` and top-k `50`.
 
-After a ten-minute CPU run - on the order of a hundred thousand tokens of training, depending
+After a ten-minute CPU run - on the order of a million tokens of training, depending
 on your machine - expect real words, plausible word endings and punctuation in roughly the
 right places, and no sentences that mean anything. Seeing that is worth more than being told
 it.

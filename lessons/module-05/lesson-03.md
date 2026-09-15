@@ -45,29 +45,36 @@ for every user, forever, and that matters more than the training bill. But as a 
 
 ## Do the arithmetic on your own run
 
-The CPU training run from lessons 13-14: an **11.5M-parameter** model, about **255 tokens per
-second** (step 9 of the log), a **600-second** budget.
+The CPU training run from lessons 13-14: an **11.5M-parameter** model, about **1,650 tokens per
+second** (97 steps of 2,048 tokens in 120 seconds), and the fork's default **600-second** budget.
 
-    tokens seen      = 255 * 600               = 153,000
-    tokens per param = 153,000 / 11,534,600    = 0.013
+    tokens seen      = 1,650 * 600             = 990,000
+    tokens per param = 990,000 / 11,534,600    = 0.086
 
-Chinchilla says 20. This run is at **0.013** - about one fifteen-hundredth of that. The model is
-not a little undertrained. It has seen almost none of the text a model its size is built for.
-That is exactly why lesson 09's samples are word-shaped nonsense, and why nobody should read a
-CPU `val_bpb` of ~2.5 as anything more than "the whole pipeline works end to end".
+Chinchilla says 20. This run is at **0.086** - about one two-hundred-and-thirtieth of that. The
+model is not a little undertrained. It has seen almost none of the text a model its size is built
+for. That is exactly why lesson 09's samples are word-shaped nonsense, and why nobody should read a
+CPU `val_bpb` in the low 2s as anything more than "the whole pipeline works end to end".
 
-Turn the arithmetic around, and it says which model you *should* have trained with 153,000 tokens:
+Turn the arithmetic around, and it says which model you *should* have trained with 990,000 tokens:
 
-    compute-optimal size = 153,000 / 20 = 7,650 parameters
+    compute-optimal size = 990,000 / 20 = 49,500 parameters
 
-**Seven and a half thousand parameters.** Now try to build a model that small. Every model here
-has an embedding table and an output head, each of shape `(vocab_size, n_embd)`, and the
-vocabulary is 8,192 tokens. Even at a ridiculous width of `n_embd = 1`:
+**About fifty thousand parameters.** Now try to build a model that small. Every model here has an
+embedding table and an output head, each of shape `(vocab_size, n_embd)`, and the vocabulary is
+8,192 tokens. Even at a tiny width of `n_embd = 8` - eight numbers to describe everything about a
+token:
 
-    wte + lm_head = 8,192 * 1 + 8,192 * 1 = 16,384 parameters
+    wte + lm_head = 8,192 * 8 + 8,192 * 8 = 131,072 parameters
 
-That is already twice the compute-optimal size, before a single transformer block, and at a width
-where the model could not learn anything. At the real width of 256, those two tables are 4.2M.
+That is already 2.6 times the compute-optimal size, before a single transformer block, and at a
+width where the model could barely learn anything. At the real width of 256, those two tables are
+4.2M.
+
+(This fork used to be slower still. With PyTorch on its default thread count the same machine did
+~255 tokens per second, which put the run at 0.013 tokens per parameter and the ideal model at
+7,650 parameters - smaller than the two tables even at `n_embd = 1`. Lesson 16 is about that
+fix.)
 
 So the arithmetic has found something real: **the vocabulary sets a floor on model size, and at
 CPU budgets that floor is far above compute-optimal.** If you genuinely wanted the best possible
@@ -86,7 +93,7 @@ embedding tables, lesson 08). Assume a 5-minute run on an H100 at about 40% MFU:
     tokens per param = 500,000,000 / 50,332,176         = ~10
 
 About 10 tokens per parameter - under Chinchilla's 20, but in the same neighbourhood, and more than
-seven hundred times closer than the CPU run. (The 40% is an assumption; a real run's MFU moves this
+a hundred times closer than the CPU run. (The 40% is an assumption; a real run's MFU moves this
 by a factor of two either way.) Landing a little under 20 is not unusual for a race against the
 clock: with the learning rate decaying to zero at the finish (lesson 12), a slightly oversized model
 often wins a short race. Upstream's depth was settled empirically - by running experiments - not
@@ -127,8 +134,8 @@ Chinchilla's rule counts **parameters**, and tokens are bought with **FLOPs**. K
 
        run = build_model(toy_config(n_layer=4, n_embd=256, sequence_len=256))
        n = sum(p.numel() for p in run.parameters()); n     # 11,534,600
-       255 * 600 / n                                        # 0.013 tokens per parameter
-       255 * 600 / 20                                       # 7,650: the compute-optimal size
+       1650 * 600 / n                                       # 0.086 tokens per parameter
+       1650 * 600 / 20                                      # 49,500: the compute-optimal size
 
 2. Fill in `lab/exercises/lesson_15.py`: `budget_report(model, seconds, flops_per_second)`.
 
@@ -164,8 +171,9 @@ Chinchilla's rule counts **parameters**, and tokens are bought with **FLOPs**. K
 ## Summary
 
 A time budget is a FLOPs budget, and spending it means trading model size against tokens seen. The
-20-tokens-per-parameter rule of thumb puts this fork's CPU run at 0.013 - over a thousand times
+20-tokens-per-parameter rule of thumb puts this fork's CPU run at 0.086 - over two hundred times
 short of compute-optimal - and shows the binding constraint is the vocabulary, whose two tables
-alone are bigger than the ideal model. Upstream's GPU run lands near 10, in the right neighbourhood.
-Parameters and FLOPs per token are different measures of size, and it pays to keep them apart.
-Next module: why the CPU is slow in the first place, and what the port gave up to run at all.
+alone outgrow the ideal model at any usable width. Upstream's GPU run lands near 10, in the right
+neighbourhood. Parameters and FLOPs per token are different measures of size, and it pays to keep
+them apart. Next module: why the CPU is slow in the first place, and what the port gave up to run
+at all.

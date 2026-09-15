@@ -1,11 +1,11 @@
 # 13 - val_bpb: the one number that decides everything
 
-Every run of `train.py` ends with a short summary. This is one from the course's own capstone
-runs:
+Every run of `train.py` ends with a short summary. This is the one from the course's reference
+2-minute CPU run (`assets/logs/cpu-2min-8threads-a.log`):
 
-    val_bpb:          2.607440
-    training_seconds: 126.0
-    num_steps:        16
+    val_bpb:          2.282386
+    training_seconds: 120.3
+    num_steps:        97
     num_params_M:     11.5
 
 Everything in that summary except the first line is context. **`val_bpb` is the score.** The
@@ -158,7 +158,7 @@ Measured on this fork's own 16 validation batches:
     3.29    gzip -9, on the same text
     3.01    xz -9
     2.87    bzip2 -9
-    ~2.6    a 2-minute CPU training run (the capstone logs)
+    2.28    a 2-minute CPU training run (the course's reference log)
     ~1.0    upstream's 5-minute H100 run, on its own settings (program.md's example: 0.9979)
 
 A few things to take from that:
@@ -172,9 +172,10 @@ A few things to take from that:
 - **Upstream's number is not comparable** to any of the others - different eval size, context and
   budget, as above. It is here only to show where serious hardware gets to.
 
-Each 0.1 is a real difference in compression. The course's two identical baseline runs landed at
-`2.6074` and `2.6124` - a gap of 0.005 from randomness alone, and on other seeds and machines it
-is often larger. Lesson 19 turns that into a rule about what counts as an improvement.
+Each 0.1 is a real difference in compression. Two identical 2-minute runs for this course landed at
+`2.2824` and `2.2756` - a gap of 0.007 from randomness alone (mostly from fitting 97 steps into the
+budget in one run and 102 in the other), and on other machines it is often larger. Lesson 19
+turns that into a rule about what counts as an improvement.
 
 ## Do this
 

@@ -1,7 +1,7 @@
 # 16 - Why it is slow: dtypes, kernels, and torch.compile
 
 A GPU run of this model does ~500 million tokens in five minutes (lesson 15). The CPU fork does
-about 150 thousand in ten. Some of that gap is simply "a CPU is not a GPU". But a surprising
+about a million in ten. Some of that gap is simply "a CPU is not a GPU". But a surprising
 amount is not - it is specific, measurable things, and understanding them is understanding what a
 training step actually spends its time on.
 
@@ -69,9 +69,11 @@ machine. For big multiplies the extra threads still roughly pay for themselves. 
 operations in a transformer, the cost of starting 16 threads and waiting for all of them swamps the
 work, hundreds of times over.
 
-This is the single biggest reason the CPU training logs in lessons 13-15 show ~8 seconds per step.
-`OMP_NUM_THREADS` (commented out in the fork's `docker-compose.yml`) sets the thread count, and the
-right value is a measurement, not a guess - which is exactly what the Do-this section has you do.
+This was the single biggest reason this fork's first CPU training runs took ~8 seconds per step.
+Both `docker-compose.yml` files now set `OMP_NUM_THREADS: "8"`, and the same 2-minute run went from
+16 steps and `val_bpb` 2.61 to ~100 steps and 2.28 - with no change to the model. But the
+right thread count is a measurement, not a guess - which is exactly what the Do-this section has you
+do, and why the lessons quote numbers from the 8-thread runs.
 
 ## 3. What `torch.compile` would fix
 
@@ -147,7 +149,8 @@ That one is big enough to be its own lesson - next.
        bash lab/lab.sh shell
 
        import time, torch
-       torch.get_num_threads()                    # the default: one per logical CPU
+       import os
+       torch.get_num_threads(), os.cpu_count()    # what the lab pins (8), and how many CPUs you have
 
        def gflops(n, dtype=torch.float32, iters=20):
            a, b = torch.randn(n, n, dtype=dtype), torch.randn(n, n, dtype=dtype)
@@ -164,7 +167,7 @@ That one is big enough to be its own lesson - next.
        from lib.common import build_model, toy_config, get_batch
        m = build_model(toy_config(n_layer=4, n_embd=256, sequence_len=256))
        x, y = get_batch(B=8, T=256)
-       for th in (1, 2, 4, 8, torch.get_num_threads()):
+       for th in (1, 2, 4, 8, os.cpu_count()):   # os.cpu_count() is PyTorch's own default
            torch.set_num_threads(th)
            m(x, y).backward(); m.zero_grad()      # warm-up at this thread count
            t0 = time.perf_counter(); m(x, y).backward(); m.zero_grad()

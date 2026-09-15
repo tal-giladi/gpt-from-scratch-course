@@ -1,23 +1,29 @@
 # 14 - Reading the training log
 
-While `train.py` runs, it prints one line per optimizer step. Here are the first ten from the
-course's own 2-minute CPU baseline (a `depth = 4`, 11.5M-parameter model):
+While `train.py` runs, it prints one line per optimizer step. Here are lines from the course's
+reference 2-minute CPU run (a `depth = 4`, 11.5M-parameter model; the full log is in
+`assets/logs/cpu-2min-8threads-a.log`):
 
-    step 00000 (0.0%)  | loss: 9.012250 | lrm: 1.00 | dt: 12716ms | tok/sec: 161 | mfu: 17.9% | epoch: 1 | remaining: 120s
-    step 00001 (0.0%)  | loss: 8.974346 | lrm: 1.00 | dt: 11989ms | tok/sec: 170 | mfu: 19.0% | epoch: 1 | remaining: 120s
-    step 00002 (0.0%)  | loss: 8.830735 | lrm: 1.00 | dt: 10462ms | tok/sec: 195 | mfu: 21.8% | epoch: 1 | remaining: 120s
-    step 00003 (0.0%)  | loss: 8.596716 | lrm: 1.00 | dt: 10711ms | tok/sec: 191 | mfu: 21.3% | epoch: 1 | remaining: 109s
-    step 00004 (8.9%)  | loss: 8.448889 | lrm: 1.00 | dt: 10240ms | tok/sec: 200 | mfu: 22.3% | epoch: 1 | remaining: 99s
-    step 00005 (17.5%) | loss: 8.250752 | lrm: 1.00 | dt: 8656ms  | tok/sec: 236 | mfu: 26.4% | epoch: 1 | remaining: 90s
+    step 00000 (0.0%)  | loss: 9.012250 | lrm: 1.00 | dt: 1584ms | tok/sec: 1,292 | mfu: 28.8% | epoch: 1 | remaining: 120s
+    step 00001 (0.0%)  | loss: 8.972597 | lrm: 1.00 | dt: 1303ms | tok/sec: 1,572 | mfu: 35.0% | epoch: 1 | remaining: 120s
+    step 00002 (0.0%)  | loss: 8.834017 | lrm: 1.00 | dt: 1667ms | tok/sec: 1,228 | mfu: 27.4% | epoch: 1 | remaining: 120s
+    step 00003 (0.0%)  | loss: 8.609586 | lrm: 1.00 | dt: 1105ms | tok/sec: 1,853 | mfu: 41.3% | epoch: 1 | remaining: 119s
+    step 00004 (0.9%)  | loss: 8.458106 | lrm: 1.00 | dt: 1333ms | tok/sec: 1,536 | mfu: 34.2% | epoch: 1 | remaining: 118s
+    step 00005 (2.0%)  | loss: 8.250811 | lrm: 1.00 | dt: 1147ms | tok/sec: 1,785 | mfu: 39.8% | epoch: 1 | remaining: 116s
     ...
-    step 00009 (50.1%) | loss: 7.795093 | lrm: 1.00 | dt: 8023ms  | tok/sec: 255 | mfu: 28.4% | epoch: 1 | remaining: 52s
+    step 00009 (5.9%)  | loss: 7.760660 | lrm: 1.00 | dt: 1326ms | tok/sec: 1,544 | mfu: 34.4% | epoch: 1 | remaining: 112s
+    ...
+    step 00045 (50.7%) | loss: 6.692634 | lrm: 0.99 | dt: 1158ms | tok/sec: 1,768 | mfu: 39.4% | epoch: 1 | remaining: 58s
+    step 00046 (51.7%) | loss: 6.691249 | lrm: 0.97 | dt: 1120ms | tok/sec: 1,828 | mfu: 40.7% | epoch: 1 | remaining: 57s
+    ...
+    step 00096 (99.2%) | loss: 6.198533 | lrm: 0.02 | dt: 1314ms | tok/sec: 1,558 | mfu: 34.7% | epoch: 1 | remaining: 0s
 
 Each field answers a different question. Learning to read this line is most of what "debugging
 a training run" means in practice.
 
 ## Field by field
 
-**`step 00009 (50.1%)`** - the step number, and `progress` from lesson 12 as a percentage of the
+**`step 00009 (5.9%)`** - the step number, and `progress` from lesson 12 as a percentage of the
 time budget. Notice steps 0-3 all say `0.0%`: the percentage is computed *before* the step's time
 is added, and steps 0, 1 and 2 are the untimed warm-up steps, which never count.
 
@@ -30,20 +36,22 @@ the log shows a running average that keeps 90% of the old value each step:
 The division is the same cold-start correction as Adam's (lesson 11): the average starts at 0,
 and without it the first few values would be far too low. That is why step 0 shows `9.012` - the
 real loss, `ln(8192)` - instead of `0.9`. What to look for: it should start near 9.01 and keep
-falling. A curve that goes flat early usually means the learning rate is too low; `NaN` or a jump
-past 100 trips the fast-fail (lesson 10).
+falling - here to 6.2 by the last step. A curve that goes flat early usually means the learning
+rate is too low; `NaN` or a jump past 100 trips the fast-fail (lesson 10).
 
 **`lrm`** - the learning-rate multiplier from lesson 12. It stays at `1.00` for the first half of
-the *time* budget, then falls to 0. In the log above, step 9 is at 50.1%, so from the next step on
-it starts dropping. If you see it falling in the very first few steps, your budget is only a few
-steps long - common the first time you set a short `AR_TIME_BUDGET` on a slow machine.
+the *time* budget, then falls to 0. In the log above, step 45 is the first past 50% and shows
+`0.99`; by step 96, at 99.2%, it is down to `0.02`. If you see it falling in the very first few
+steps, your budget is only a few steps long - common the first time you set a short
+`AR_TIME_BUDGET` on a slow machine.
 
 **`dt`** - wall-clock milliseconds for this whole optimizer step, including every micro-batch.
-This is the number a speed improvement moves. Note the first steps are slower (12.7 s) than later
-ones (8.0 s): caches warm up, memory gets allocated once and reused.
+This is the number a speed improvement moves. On a laptop it jitters - here anywhere from about
+1.0 to 1.7 seconds from one step to the next, as other programs and the operating system take
+turns on the CPU. Read it as an average over many steps, never from a single line.
 
-**`tok/sec`** - tokens per second, simply `TOTAL_BATCH_SIZE / dt`. At step 9: `2048 / 8.023 s =
-255`. The throughput headline.
+**`tok/sec`** - tokens per second, simply `TOTAL_BATCH_SIZE / dt`. At step 9: `2048 / 1.326 s =
+1,544`. The throughput headline.
 
 **`mfu`** - how hard the hardware is working. Its own section below.
 
@@ -52,7 +60,7 @@ downloaded. It starts at 1. If it ever reaches 2 during a run, the model is seei
 already trained on, and you should download more shards.
 
 **`remaining`** - seconds of budget left, `TIME_BUDGET - total_training_time`. It stays at `120s`
-for steps 0-2 (untimed), then falls by roughly each step's `dt`: 120 -> 109 -> 99 -> 90.
+for steps 0-2 (untimed), then falls by roughly each step's `dt`: 120 -> 119 -> 118 -> 116.
 
 ## MFU: what fraction of the machine you are actually using
 
@@ -69,11 +77,11 @@ Read it as a fraction:
   multiply.
 
 Step 9 from the log, with the depth-4 model's `33,424,896` FLOPs per token and this fork's measured
-CPU peak of 30 billion FLOPs per second:
+CPU peak of 150 billion FLOPs per second:
 
-    done per second:  33,424,896 * 2,048 / 8.023 s  =  8.53 billion FLOPs/s
-    possible:                                         30 billion FLOPs/s
-    mfu = 100 * 8.53 / 30                            = 28.4%
+    done per second:  33,424,896 * 2,048 / 1.326 s  =  51.6 billion FLOPs/s
+    possible:                                         150  billion FLOPs/s
+    mfu = 100 * 51.6 / 150                           = 34.4%
 
 On a GPU the denominator is `989.5e12` - an H100's peak in bfloat16. A well-tuned GPU training run
 usually lands somewhere around 30-50%; far below that, something is wasting the hardware - too
@@ -87,9 +95,11 @@ why. MFU is relative to the hardware, so it separates the two possible fixes:
   machine or a smaller model.
 - low `tok/sec`, **low** MFU - the machine is idling; a better implementation can speed it up.
 
-On this CPU run MFU climbs from 18% to about 28% as the process warms up. That is not bad for plain
-eager PyTorch: the matrices at `n_embd = 256` are big enough that time goes into real arithmetic
-rather than overhead. Lesson 16 is about where the rest goes.
+This fork is a live example of the second case. With PyTorch left on its default 16 threads, the
+same run measured ~255 tokens per second, and against the same 150 GFLOP/s peak that is an MFU of
+about 6% - the machine was mostly idling. Pinning the thread count to 8 (lesson 16) took it to
+~1,650 tokens per second and an MFU in the mid-30s, with no change to the model at all. The run
+summary reports `mfu_percent: 36.04` over the whole budget.
 
 ## Where the FLOPs go
 
@@ -141,7 +151,7 @@ over completely - which is why long-context models care so much about attention 
 
        run = build_model(toy_config(n_layer=4, n_embd=256, sequence_len=256))
        f = run.estimate_flops(); f                          # 33,424,896 - the log's model
-       100 * f * 2048 / 8.023 / 30e9                        # 28.4 - step 9's mfu, by hand
+       100 * f * 2048 / 1.326 / 150e9                       # 34.4 - step 9's mfu, by hand
 
        long = build_model(toy_config(sequence_len=4096))
        long.estimate_flops() / m.estimate_flops()           # same weights, far more attention
