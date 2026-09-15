@@ -1,12 +1,14 @@
 # 18 - The autonomous research loop
 
-Everything so far has been the machine. This module is about the thing built on top of it,
-which is what makes this repo interesting rather than merely educational: a **loop in which
-an LLM does the research**.
+Everything so far has been the machine: how the model is built, trained and measured. This module
+is about what the repo is really *for*: a **loop in which an AI coding assistant does the research
+on its own**.
 
-`program.md` is not documentation. It is the agent's instructions - a prompt, checked into
-the repo, that turns a coding assistant into an experimenter. It is worth reading in full;
-here is its skeleton and why each rule is there.
+An "agent" here is simply an LLM that can run commands - edit a file, run a script, read the
+output - and decide what to do next based on what it saw. `program.md` is the set of instructions
+that turns such an assistant into an experimenter. It is not documentation for humans; it is a
+prompt, checked into the repo. It is short and worth reading in full. Here is its skeleton, and
+why each rule is there.
 
 ## The loop
 
@@ -21,59 +23,93 @@ here is its skeleton and why each rule is there.
       8. if val_bpb improved: keep the commit (the branch advances)
       9. if it did not: git reset back
 
-That is hill climbing, with git as the state and `val_bpb` as the objective. Roughly twelve
-experiments an hour; a hundred while a human sleeps.
+In plain words: try an idea, measure it, keep it if the number went down, undo it if not, repeat.
+Git is the memory - the current commit is always "the best version so far" - and `results.tsv` is
+the lab notebook. `program.md`'s own example of that notebook:
+
+    commit    val_bpb    memory_gb  status   description
+    a1b2c3d   0.997900   44.0       keep     baseline
+    b2c3d4e   0.993200   44.2       keep     increase LR to 0.04
+    c3d4e5f   1.005000   44.0       discard  switch to GeLU activation
+    d4e5f6g   0.000000   0.0        crash    double model width (OOM)
+
+Row 2 went down, so it stays and becomes the new starting point. Row 3 went up, so the code is
+reset to row 2's commit. Row 4 did not even finish.
+
+This strategy is called **hill climbing**: from where you stand, take a step; if it is an
+improvement, stay there; if not, step back and try another direction. It never plans ahead and
+never accepts a temporary loss, which makes it simple and relentless. On a GPU each experiment is
+five minutes, so roughly twelve an hour - about a hundred while a human sleeps.
 
 ## The three rules that make it work
 
-**1. Fix the metric, fence off the file.** `prepare.py` is read-only. The evaluation, the
-tokenizer, the data loading, the time budget and the sequence length all live there. The
-agent may change `train.py` and nothing else. Without this the loop optimises the
-*measurement* - and it would, cheerfully, because "reduce EVAL_TOKENS" does lower the
-observed number.
+**1. Fix the metric, fence off the file.** `prepare.py` is read-only. The evaluation, the tokenizer,
+the data loading, the time budget and the sequence length all live there. The agent may change
+`train.py` and nothing else. Without this rule the loop would optimise the *measurement* - and it
+would do so cheerfully, because "reduce `EVAL_TOKENS`" really does change the reported number
+(lesson 13).
 
-**2. Fix the budget.** Every run is five minutes of training time. Then a modelling change
-and a speed change are the same kind of thing: both are judged by the `val_bpb` reachable in
-five minutes. This is the single design decision that makes the results comparable at all.
+**2. Fix the budget.** Every run gets the same training time. Then a modelling change and a speed
+change are the same kind of thing: both are judged by the `val_bpb` reachable in that time (lesson
+12). This single design decision is what makes results from different experiments comparable at
+all.
 
-**3. Redirect the output.** `> run.log 2>&1`, and read it with `grep`, explicitly "do NOT
-use tee or let output flood your context". A thousand progress lines would evict the agent's
-memory of what it was testing. Context is a resource the loop has to manage, exactly like
-GPU memory.
+**3. Redirect the output.** `> run.log 2>&1` sends everything the run prints into a file, and the
+agent reads back only the lines it needs with `grep`. `program.md` is explicit: "do NOT use tee or
+let output flood your context". A run prints one progress line per step - hundreds of lines - and an
+LLM can only hold so much text at once (its *context*). If the progress lines pushed out the
+agent's memory of what it was testing and why, the next decision would be made blind. Context is a
+resource the loop has to manage, exactly like memory on the GPU.
 
 ## The judgement rules
 
-Two instructions in `program.md` are about taste rather than mechanics, and they are the
-ones that keep the codebase from rotting over a hundred experiments:
+Two instructions are about taste rather than mechanics, and they are the ones that keep the code
+from rotting over a hundred experiments:
 
-- **Simplicity criterion.** "A 0.001 improvement that adds 20 lines of hacky code? Probably
-  not worth it. A 0.001 improvement from deleting code? Definitely keep." Without this, hill
-  climbing on a single scalar produces an unreadable pile of micro-optimisations - the
+- **Simplicity criterion.** "A 0.001 val_bpb improvement that adds 20 lines of hacky code? Probably
+  not worth it. A 0.001 val_bpb improvement from deleting code? Definitely keep." Without it, hill
+  climbing on one number produces an unreadable pile of tiny tweaks, each of which won once - the
   classic failure of automated search against a metric.
-- **NEVER STOP.** "Do not ask 'should I keep going?' The human might be asleep." An agent
-  that checks in every hour is not autonomous; it is a slow human.
+- **NEVER STOP.** "Do NOT pause to ask the human if you should continue." The human might be asleep.
+  An agent that checks in every hour is not autonomous; it is a slow human.
+
+## The weak spot: "improved" means "lower by any amount"
+
+Step 8 keeps a change if `val_bpb` is lower - by *any* amount. Now remember lesson 13: two identical
+2-minute runs on this machine came out at `2.2824` and `2.2756`. Nothing changed between them; the
+0.007 gap is pure chance.
+
+So picture a change that does **nothing at all**. Its run is just another roll of that same dice,
+and it comes out lower than the baseline about half the time. Hill climbing keeps it, the branch
+advances, and the next experiment is compared against a baseline that got lucky. Run a hundred
+do-nothing experiments and roughly fifty of them get committed as "improvements".
+
+That is not a reason to distrust the loop - it is exactly the question lesson 19 answers: how big
+does a difference have to be before you believe it?
 
 ## What it is not
 
-It is not a general research agent. The search space is one file, the objective is one
-scalar, and the feedback loop is five minutes long. That combination - small, measurable,
-fast - is exactly what makes it tractable, and it is worth being honest that most research
-questions have none of those three properties.
+It is not a general research agent. The search space is one file, the objective is one number, and
+the feedback arrives within minutes. That combination - small, measurable, fast - is exactly what
+makes it tractable, and most research questions have none of those three properties.
 
-And on a CPU it is a demonstration, not research: with each run taking ten minutes to reach
-`val_bpb ≈ 2.4`, and run-to-run noise of a few hundredths, most real effects are below your
-noise floor. You can watch the mechanism work. You cannot trust its conclusions. Lesson 19
-is about telling those two situations apart.
+And on a CPU it is a demonstration, not research. A 2-minute run here reaches `val_bpb` around 2.28,
+with run-to-run noise of several thousandths, and many real effects are smaller than that. You can
+watch the mechanism work. You should not trust its conclusions without the extra care of lesson 19.
 
 ## Do this
 
-1. Read `program.md` in the repo - all of it, it is short.
+1. Read `program.md` in the autoresearch repo - all of it, it is short.
 
-2. Run one experiment by hand, the way the agent would:
+2. Run one experiment by hand, the way the agent would. From the course folder:
 
-       docker compose run --rm -e AR_TIME_BUDGET=120 autoresearch python train.py
+       bash lab/lab.sh experiment try1
 
-   and look at the summary block it prints at the end.
+   This runs `train.py` inside the lab container with the course's fixed 2-minute protocol, sends
+   every line it prints to `lab/capstone/runs/try1.log` (step 4 of the loop), and then shows you
+   the summary block at the end. Open the log and find the three kinds of line that contain a colon:
+   the `Model config:` dump near the top, the `step ... | loss: ...` progress lines, and the summary
+   after `---`. Only the last kind is the result.
 
 3. Fill in `lab/exercises/lesson_18.py`: `parse_summary(text)` turns that block into a dict,
    the way step 5 of the loop does. It must also handle the two failure modes: a crashed run
@@ -85,19 +121,26 @@ is about telling those two situations apart.
 
 ## Hints
 
-- The summary is the block after a line containing only `---`. Every line is
-  `key:` then whitespace then a value.
+- The summary is the block after a line containing only `---`. Every line is `key:`, then
+  whitespace, then a value:
+
+      ---
+      val_bpb:          2.282386
+      training_seconds: 120.3
+      num_steps:        97
+
 - Return `{"status": "ok", ...}` with `val_bpb`, `training_seconds`, `num_steps`,
   `num_params_M` and `depth` as numbers - floats where the value has a decimal point, ints
   where it does not (`num_steps`, `depth`).
 - If the text contains a line that is exactly `FAIL`, return `{"status": "diverged"}` - the
-  run detected `NaN` and killed itself.
+  run detected `NaN` (or an exploding loss) and killed itself.
 - If there is no summary and no `FAIL`, return `{"status": "crashed"}`. A traceback is not
-  an exception to handle; it is a result to record.
-- Ignore unknown keys rather than failing on them - the summary grows when someone adds a
-  metric, and a parser that breaks on a new line is a parser that stops the loop.
-- `line.split(":", 1)` splits on the first colon only, which matters if a value ever
-  contains one.
+  an exception for your parser to raise; it is a result to record.
+- Progress lines and the config dump contain colons too. Only accept the keys you know, and
+  ignore everything else - including a new metric someone adds to the summary later. A parser
+  that breaks on an unexpected line is a parser that stops the loop.
+- `line.split(":", 1)` (or `line.partition(":")`) splits on the first colon only, which matters
+  if a value ever contains one.
 
 ## Solution
 
@@ -129,8 +172,10 @@ is about telling those two situations apart.
 
 ## Summary
 
-The research loop is hill climbing with git as its memory and `val_bpb` as its objective,
-and it works because three things are frozen: the metric, the file the agent may edit, and
-the time budget. The two soft rules - prefer simplicity, never stop to ask - are what keep
-a hundred unsupervised experiments from producing an unreadable codebase. Next: how to know
-whether a result from that loop means anything.
+The research loop is hill climbing with git as its memory and `val_bpb` as its objective: try an
+idea, keep it if the number went down, undo it if not. It works because three things are frozen -
+the metric, the file the agent may edit, and the time budget - and because the agent reads results
+with `grep` instead of drowning its context in progress lines. The two soft rules, prefer simplicity
+and never stop to ask, keep a hundred unsupervised experiments from producing an unreadable codebase.
+Its weak spot is that "lower" includes "lower by chance". Next: how to know whether a result from
+that loop means anything.

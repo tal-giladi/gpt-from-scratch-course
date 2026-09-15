@@ -131,6 +131,11 @@ Intel server chips). This machine has neither. Measured at 8 threads:
     256 x 256    189              192            the same
     1024 x 1024  279              297            the same
 
+That is a single matmul. A whole training step is far worse: run with `AR_BF16=1` (autocast plus
+bf16 embeddings, rotary tables and Muon), one step of the 4-layer model took about **190 seconds**
+instead of about 1.2 - over 150 times slower. Since the big matmuls above ran at about the same speed in
+either format, nearly all of that cost is in the operations around them.
+
 No reliable win, sometimes a large loss, and always less precision. So the port introduced
 `LOW_DTYPE`: `bfloat16` when `USE_BF16` (the GPU default), `float32` on CPU, and it skips `autocast`
 entirely on CPU.

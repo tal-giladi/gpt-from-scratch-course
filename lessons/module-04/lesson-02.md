@@ -112,14 +112,14 @@ usually wildly unequal. A simple example:
     G = [[10,  0  ],
          [ 0,  0.1]]
 
-This gradient wants to push hard along the first direction and barely at all along the second
-- a 100-to-1 ratio. Take the step as-is and the matrix mostly learns along one or two dominant
+This gradient wants to push hard along the first direction and barely at all along the second:
+a 100-to-1 ratio. Take the step as-is and the matrix mostly learns along one or two dominant
 directions, while the rest crawl.
 
 ### The fix: orthogonalise
 
-Muon replaces the gradient with the closest matrix that has **all singular values equal to 1**
-- same directions, equal strength (an *orthogonal* matrix, or semi-orthogonal when it is not
+Muon replaces the gradient with the closest matrix that has **all singular values equal to 1**:
+same directions, equal strength (an *orthogonal* matrix, or semi-orthogonal when it is not
 square). For the example above:
 
     G after Muon ~ [[0.91, 0   ],

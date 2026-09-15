@@ -85,6 +85,14 @@ cmd_status() {
   run_in_lab python checks/_status.py
 }
 
+cmd_experiment() {
+  # One training run under the capstone's fixed protocol (tools/run_experiment.py). This
+  # has to go through the container directly: `shell` opens a Python prompt, where
+  # `python tools/run_experiment.py ...` is not a command.
+  require_docker
+  run_in_lab python tools/run_experiment.py "$@"
+}
+
 cmd_shell() {
   require_docker
   run_in_lab python
@@ -98,8 +106,9 @@ case "${1:-}" in
   reset)  cmd_reset "${2:?usage: lab.sh reset NN}" ;;
   status) cmd_status ;;
   shell)  cmd_shell ;;
+  experiment) shift; cmd_experiment "${1:?usage: lab.sh experiment NAME [AR_X=value ...]}" "${@:2}" ;;
   *)
-    echo "Usage: bash lab/lab.sh {up|check NN|hint NN|solve NN|reset NN|status|shell}"
+    echo "Usage: bash lab/lab.sh {up|check NN|hint NN|solve NN|reset NN|status|shell|experiment NAME [AR_X=value]}"
     exit 1
     ;;
 esac

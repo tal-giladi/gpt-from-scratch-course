@@ -45,6 +45,7 @@ bash lab/lab.sh check 01
 | `bash lab/lab.sh reset NN` | restore exercise NN to its original stub |
 | `bash lab/lab.sh status` | which exercises currently pass |
 | `bash lab/lab.sh shell` | a Python shell inside the lab, with the repo importable |
+| `bash lab/lab.sh experiment NAME [AR_X=value]` | one 2-minute training run under the fixed protocol, logged to `lab/capstone/runs/NAME.log` (lessons 18-20) |
 
 ---
 
