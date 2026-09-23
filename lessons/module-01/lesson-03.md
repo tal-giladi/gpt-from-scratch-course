@@ -36,9 +36,16 @@ wrong ones less likely".
 
 The units are **nats** (natural log). Two numbers are worth memorising:
 
-- A model that has learned *nothing* - uniform over 8192 tokens - has loss
-  `ln(8192) = 9.0109`. When you start a training run, the first step prints `9.011`. If it
-  does not, something is wrong before training even began.
+- A model that has learned *nothing* - uniform over 8192 tokens - assigns the correct token
+  probability `p = 1/8192`, so its loss is `-log(1/8192)`, **not** `log(1/8192)`. Those are
+  different numbers with different signs: `1/8192` is less than 1, so `log(1/8192)` on its own
+  is *negative* (about `-9.0109`) - a log of a fraction is always negative. The loss formula's
+  leading minus sign flips that back to positive: by the quotient rule `log(1/x) = -log(x)`, so
+  `-log(1/8192) = -(-log(8192)) = log(8192) = 9.0109`. It is the double negative - the minus in
+  the loss formula cancelling the minus that dividing by a number bigger than 1 produces - that
+  turns "a small probability, a negative log" into "loss `ln(8192)`, a positive number". When
+  you start a training run, the first step prints `9.011`. If it does not, something is wrong
+  before training even began.
 - Perfect prediction is loss 0. Real models land between; each 0.69 nats (= ln 2) is one
   bit.
 
