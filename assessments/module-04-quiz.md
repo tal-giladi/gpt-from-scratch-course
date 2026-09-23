@@ -1,6 +1,6 @@
 # Module 04 quiz - Training
 
-Six questions. Answers and explanations at the bottom - try all six first.
+Seven questions. Answers and explanations at the bottom - try all seven first.
 
 ---
 
@@ -25,6 +25,10 @@ computing an SVD. Give the performance reason and the correctness caveat.
 `loss / grad_accum_steps`. What symptom would you see in the log, and what would you
 mistakenly conclude?
 
+**7.** A colleague says: "after Muon runs, the weight matrix `W` ends up with singular values
+all equal to about 1." Is this accurate? If not, name the matrix whose singular values
+actually get pushed toward 1, and say roughly how much `W` itself changes on one step.
+
 ---
 
 ## Answers
@@ -44,16 +48,21 @@ run often does not diverge; it just trains worse, which is the hardest kind of b
 
 **3.** Dividing by the square root of the smoothed squared gradient makes each coordinate's
 step scale-invariant: a parameter whose gradients are consistently tiny gets the same
-effective step as one whose gradients are huge. Decoupling the decay keeps it from passing
-through that same normalisation - added into the gradient, weight decay would be scaled down
-exactly for the parameters with the largest gradients, so the amount of decay would depend on
-the loss surface rather than on the hyperparameter.
+effective step as one whose gradients are huge - squaring the gradient before smoothing it
+throws away the sign, so this running estimate (`v`) tracks only how *big* the gradient
+typically is, never which way it points, which is exactly why it is safe to divide by. Decoupling
+the decay keeps it from passing through that same normalisation - added into the gradient,
+weight decay would be scaled down exactly for the parameters with the largest gradients, so the
+amount of decay would depend on the loss surface rather than on the hyperparameter.
 
 **4.** Performance: Newton-Schulz is only matrix multiplies, which run at peak throughput on
 a GPU (and can be batched over a whole group of same-shaped parameters), while an SVD is
 sequential, poorly parallelised, and would dominate the step. Caveat: it is an
-*approximation* - five iterations get the singular values close to 1, not exactly 1 - and it
-requires the input to be normalised first (`X / (||X|| * 1.02)`) for the iteration to
+*approximation* - five iterations get the *singular values* close to 1, not exactly 1, and not
+the matrix's own entries either (a pure rotation matrix like `[[0.6,-0.8],[0.8,0.6]]` has
+singular values of exactly 1 with no entry anywhere near 1, which is the general relationship -
+diagonal matrices are the special case where entries and singular values happen to coincide).
+It also requires the input to be normalised first (`X / (||X|| * 1.02)`) for the iteration to
 converge at all.
 
 **5.** They are used differently. `wte` is a lookup: each step touches only the rows for the
@@ -70,3 +79,11 @@ looks normal. That is exactly what makes it dangerous. The mistaken conclusion i
 does not matter" - which stays true only until someone swaps in plain SGD (the effective learning
 rate jumps 256x and the fast-fail fires), adds gradient clipping (every step gets clipped), or
 logs and compares gradient norms (all 256x off). The bug is silent here, not harmless.
+
+**7.** Not accurate. Muon never inspects or targets `W`'s own singular values - it operates
+entirely on the *gradient* `G` that `backward()` produces for `W` (and matrices derived from
+it: the Nesterov-blended `direction`, then the orthogonalised, NorMuon-scaled update), pushing
+*that* matrix's singular values toward 1. `W` itself is touched exactly once per step, as
+`W -= lr * (the finished update)`, so `W` changes by roughly `lr` (`0.04` in this repo) each
+step, not by jumping to singular values of 1 - it accumulates many small, well-conditioned
+nudges over the course of training rather than being rewritten in one step.
