@@ -2,6 +2,11 @@
 
 Terms as this course uses them, with the lesson that introduces each.
 
+**Activation** (10) - any tensor of values produced during the forward pass (a layer's output,
+most often) - not a parameter, not a gradient. Discarded and recomputed fresh every step.
+Also used, confusingly, for the nonlinearity itself (ReLU²'s entry calls it "this model's MLP
+activation").
+
 **AdamW** (11) - the optimizer used for embeddings, the unembedding and the scalars. Keeps a
 smoothed gradient and a smoothed squared gradient per coordinate, and divides one by the
 square root of the other. The "W" is decoupled weight decay.
