@@ -56,8 +56,13 @@ turns on the CPU. Read it as an average over many steps, never from a single lin
 **`mfu`** - how hard the hardware is working. Its own section below.
 
 **`epoch`** - how many times the data loader has gone through all of the training shards you
-downloaded. It starts at 1. If it ever reaches 2 during a run, the model is seeing text it has
-already trained on, and you should download more shards.
+downloaded. It starts at 1. When it reaches 2, the model starts seeing text it has already
+trained on. That is not an error - small models trained on small datasets (image classifiers,
+the tiny Shakespeare GPT) routinely run for many epochs. LLM pretraining is different: web
+text is plentiful, so big runs usually aim for about one epoch, because fresh text teaches
+more than a repeat. A few repeats cost little; many start to cause overfitting (training
+loss keeps falling while `val_bpb` stops improving). So if you see `epoch 2` here, the cheap
+fix is to download more shards.
 
 **`remaining`** - seconds of budget left, `TIME_BUDGET - total_training_time`. It stays at `120s`
 for steps 0-2 (untimed), then falls by roughly each step's `dt`: 120 -> 119 -> 118 -> 116.
