@@ -1,0 +1,51 @@
+# Multiple-choice version of the quiz in module-07-quiz.md (question N = question N there).
+# The lesson's model answer is shown as the explanation. `source` fingerprints the original
+# question + answer; if the lesson changes, the site flags the question for review.
+- source: b3b560ff0bcb
+  question: "`program.md` lets the agent change `train.py` but not `prepare.py`. Which change to `prepare.py` would lower `val_bpb` without improving the model?"
+  options:
+    - Shrink `EVAL_TOKENS`, or leak a training shard into validation
+    - Cache the tokenized shards, or speed up the dataloader
+    - Shuffle the training shards, or download more training data
+    - Pin more CPU threads, or switch the dtype to bf16
+  correct: 0
+- source: 8df0c04d31e4
+  question: Why does the loop send training output to a file and read it with `grep` instead of printing it?
+  options:
+    - "Disk space: printed output fills the log disk overnight"
+    - "CPU time: printing slows training by several percent"
+    - "Context: hundreds of log lines would crowd reasoning out of the agent's window"
+    - "Bandwidth: printed output is streamed to the model provider"
+  correct: 2
+- source: fb7e768ca871
+  question: You run 60 experiments overnight, keeping each that lowers `val_bpb`; twelve are kept. Why are fewer than twelve real, and what is the cheapest defence?
+  options:
+    - All twelve are real, because each lowered `val_bpb`; no defence is needed
+    - Some are noise from 60 uncorrected tests; re-run the survivors against the original baseline
+    - Later runs got more time; cap `TIME_BUDGET` for every run
+    - They overfit the validation set; add dropout and retrain
+  correct: 1
+- source: 6181f1b1de44
+  question: "Run A: depth 4, `TIME_BUDGET=600`, 2.399. Run B: depth 6, `TIME_BUDGET=900`, 2.310. What is the one-sentence rejection, and how must B be re-run?"
+  options:
+    - Depth 6 is better; re-run A at depth 6 to confirm it
+    - B wins by 0.089; re-run B at a second seed only
+    - The gap is noise; re-run A at depth 4 with a new seed
+    - B trained 50% longer, so it says nothing about depth; re-run B at `TIME_BUDGET=600`
+  correct: 3
+- source: 416dd24e1aa0
+  question: Your measured noise floor is 0.005 bpb and a change comes in 0.004 better. What do you report?
+  options:
+    - A win of 0.004 bpb; keep the change
+    - A loss, since 0.004 is below the noise floor; revert it
+    - Inconclusive; run both arms several times, or run longer to reduce the noise
+    - A win if a second run agrees; report the better of the two
+  correct: 2
+- source: cf238ea02939
+  question: Why is `NEVER STOP` in the instructions, and what should a human check in the morning?
+  options:
+    - Runs must go unattended; it may chase noise, so re-run survivors and read the diff
+    - It saves tokens; the agent may fill the disk, so check free space
+    - It prevents crashes; the agent may stop early, so check the uptime
+    - It speeds each run up; the agent may skip evaluation, so check `val_bpb` exists
+  correct: 0

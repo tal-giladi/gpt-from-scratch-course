@@ -1,0 +1,51 @@
+# Multiple-choice version of the quiz in module-06-quiz.md (question N = question N there).
+# The lesson's model answer is shown as the explanation. `source` fingerprints the original
+# question + answer; if the lesson changes, the site flags the question for review.
+- source: 51a41ffdfe20
+  question: A large matmul runs at ~150 GFLOP/s, but a training step reaches ~9 GFLOP/s, and ~52 after `OMP_NUM_THREADS=8`. What explains the gap, and what does each fix address?
+  options:
+    - Only the thread count; `torch.compile` would speed up the matmuls themselves
+    - Thread overhead (the thread fix), small matmuls, elementwise memory traffic and dispatch (compile)
+    - Thermal throttling and swapping; `torch.compile` would address both
+    - Only small matmuls; the thread change and `torch.compile` both fix that
+  correct: 1
+- source: 71968d3d9d75
+  question: A colleague sets `AR_BF16=1` on your laptop CPU 'to speed things up.' What happens, and how do you settle it quickly?
+  options:
+    - No faster, maybe slower, since this CPU lacks bf16 instructions; run the dtype benchmark
+    - About 2x faster, since bf16 halves memory traffic; check the training log
+    - Faster but less accurate; compare the final `val_bpb` after a full run
+    - Identical, since PyTorch ignores bf16 on CPU; check the environment variable
+  correct: 0
+- source: 618ec350b82e
+  question: Why does `MuonAdamW` keep learning rates in 0-D tensors rather than Python floats, and does it matter in the CPU fork?
+  options:
+    - Floats lose precision; it matters equally on the CPU
+    - Tensors multiply faster; it matters most in the CPU fork
+    - Floats can't follow a schedule; the CPU fork breaks without it
+    - Floats get baked into the compiled graph, recompiling every step; moot on CPU, which skips compile
+  correct: 3
+- source: e7c88ba73854
+  question: "Without the word 'approximate': why is FlashAttention faster than naive attention?"
+  options:
+    - It skips most query-key pairs, so it does far fewer FLOPs
+    - It uses lower precision for the scores, so each FLOP is cheaper
+    - It never writes the `T x T` score matrix to memory, cutting memory traffic
+    - It caches keys between steps, so attention is computed only once
+  correct: 2
+- source: 55de2dd4d9fd
+  question: The CPU port passes `is_causal=True` for full-causal attention and an explicit mask for windowed layers. Why does that matter, and what does the window cost?
+  options:
+    - No difference on CPU; windows are free on both CPU and GPU
+    - The flag needs no mask tensor; a mask costs ~10x more memory, and windows save no compute
+    - "`is_causal` builds the full score tensor; the mask avoids it, so windows are faster"
+    - The mask is needed for correctness; windows cost twice the FLOPs
+  correct: 1
+- source: 033915d47d8d
+  question: Of the things the CPU port gave up (FlashAttention, bf16, `torch.compile`, 524K-token batches, the eval budget), which were forced, and how would you test a judgement call?
+  options:
+    - All were forced by the CPU; no experiment could change any of them
+    - bf16 and FlashAttention were judgement calls; test by enabling both on CPU
+    - Only the eval budget was a judgement call; test with a larger `EVAL_TOKENS`
+    - FlashAttention, eval budget, 524K batches forced; test `torch.compile` at equal time budgets
+  correct: 3

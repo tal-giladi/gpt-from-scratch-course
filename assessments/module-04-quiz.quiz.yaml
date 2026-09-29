@@ -1,0 +1,59 @@
+# Multiple-choice version of the quiz in module-04-quiz.md (question N = question N there).
+# The lesson's model answer is shown as the explanation. `source` fingerprints the original
+# question + answer; if the lesson changes, the site flags the question for review.
+- source: 0fec6d3de532
+  question: After the first `backward()` of a fresh model, `mlp.c_fc.weight.grad.abs().max()` prints `0.0`. Is this a bug?
+  options:
+    - "Yes: `c_fc` was initialised to zero by mistake"
+    - "No, at any step: `c_fc` never receives gradient by design"
+    - "Yes: `zero_grad` ran after `backward()` instead of before it"
+    - Not at step 0, because `c_proj` is zero; a bug only if it stays zero after step 1
+  correct: 3
+- source: a8311c12dca6
+  question: Someone removes `model.zero_grad(set_to_none=True)` from the training loop and the run does not crash. What happens to the effective step size over the first ten steps?
+  options:
+    - It stays the same, because Adam normalises every gradient
+    - It grows roughly with the step number, as each update sums all past gradients
+    - It shrinks, because stale gradients cancel the new ones
+    - It resets every step, because `backward()` overwrites `.grad`
+  correct: 1
+- source: 90296080d1b2
+  question: Why does AdamW divide by `sqrt(exp_avg_sq)`, and why is weight decay applied as `p.mul_(1 - lr*wd)` instead of adding `wd*p` to the gradient?
+  options:
+    - Dividing lowers the learning rate over time; decoupling makes the decay act faster
+    - Dividing keeps the gradient's sign; decoupling lets the decay follow the gradient
+    - Dividing makes each coordinate's step scale-invariant; decoupling keeps decay out of that normalisation
+    - Dividing prevents NaNs; decoupling saves one multiply per parameter
+  correct: 2
+- source: 369ecde39627
+  question: Muon orthogonalises the update with five Newton-Schulz iterations instead of an SVD. What is the performance reason, and the caveat?
+  options:
+    - Just matmuls, fast on GPUs; but singular values only get close to 1, and input must be normalised
+    - It is exact, unlike SVD; but it needs double precision to converge
+    - It uses less memory than SVD; but it works only for square matrices
+    - It runs on the CPU while the GPU trains; but it sets the matrix entries to 1
+  correct: 0
+- source: 58a9819a996a
+  question: "`EMBEDDING_LR = 0.6` and `UNEMBEDDING_LR = 0.004`, and both matrices are `(vocab, n_embd)`. Why the 150x difference?"
+  options:
+    - "`lm_head` has more parameters than `wte`, so it needs a smaller step"
+    - "`wte` is updated for every token every step, so it can take a larger step"
+    - The two were tuned separately, and the difference is arbitrary
+    - "`wte` is a lookup touching only the batch's rows; `lm_head` is dense, used at every position"
+  correct: 3
+- source: 6da134cd6e5f
+  question: "`DEVICE_BATCH_SIZE = 8`, `MAX_SEQ_LEN = 256`, `TOTAL_BATCH_SIZE = 2**19`. How many micro-batches per step, and what happens if `loss / grad_accum_steps` is forgotten?"
+  options:
+    - 128; the loss explodes, and you conclude the learning rate is too high
+    - 256; the log looks almost normal, and you wrongly conclude the division doesn't matter
+    - 256; the logged loss is 256x too high, and you conclude the model is broken
+    - 512; each step is 256x slower, and you conclude the CPU is too weak
+  correct: 1
+- source: 64fe0b7c6fe7
+  question: A colleague says 'after Muon runs, `W` ends up with singular values all equal to about 1.' Is that accurate?
+  options:
+    - "Yes: after every step all of `W`'s singular values are close to 1"
+    - "No: `W`'s singular values are pushed toward 0, and `W` changes by about 1 per step"
+    - "No: the update matrix's singular values go toward 1, and `W` changes by roughly `lr` per step"
+    - Yes, but only for square matrices, and `W` is rewritten entirely each step
+  correct: 2

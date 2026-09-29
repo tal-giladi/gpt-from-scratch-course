@@ -1,0 +1,51 @@
+# Multiple-choice version of the quiz in module-05-quiz.md (question N = question N there).
+# The lesson's model answer is shown as the explanation. `source` fingerprints the original
+# question + answer; if the lesson changes, the site flags the question for review.
+- source: 56cec750b8bc
+  question: "`evaluate_bpb` sums nats and bytes over all batches, then divides once. Batch A is 1,000 nats over 1,000 bytes; batch B is 100 nats over 10 bytes. What do summing and per-batch averaging give?"
+  options:
+    - Summed ≈ 1.57 bpb; averaged ≈ 7.9 bpb, because the tiny batch dominates
+    - Summed ≈ 7.9 bpb; averaged ≈ 1.57 bpb, because the large batch dominates
+    - Both give ≈ 1.57 bpb, since the two methods are equivalent here
+    - Summed ≈ 1.09 bpb; averaged ≈ 5.5 bpb, because nats are not converted
+  correct: 0
+- source: 171076397ab5
+  question: An agent lowers `EVAL_TOKENS` from 21M to 32,768 and reports a `val_bpb` improvement. What is wrong, and when is changing `EVAL_TOKENS` legitimate?
+  options:
+    - Nothing is wrong, since fewer tokens make evaluation more precise
+    - The model overfit; it is legitimate whenever evaluation is too slow
+    - The run was too short; it is legitimate whenever training time is limited
+    - The ruler changed, not the model; legitimate only as a declared, fork-wide change
+  correct: 3
+- source: 867983fae8ef
+  question: Special tokens are excluded from both sums. Why would including them make the metric easier to game, and in which direction?
+  options:
+    - "Harder to game: special tokens add bytes, so the score rises"
+    - "Easier, downward: near-zero-loss BOS terms add to the nats but no bytes"
+    - "Easier, upward: special tokens are unpredictable and inflate the loss"
+    - "No effect: special tokens are too rare to change the score"
+  correct: 1
+- source: 798b96ed0629
+  question: "A CPU run reports `mfu: 5.7%`, `tok/sec: 255`. After a one-line config change, with the same model and machine, it reports `mfu: 34.4%`, `tok/sec: 1,544`. What kind of change was it?"
+  options:
+    - A better model; MFU shows the new architecture needs fewer FLOPs
+    - Better hardware; MFU shows the machine's peak rose six-fold
+    - Better use of the same hardware; 5.7% MFU showed the machine idle most of the time
+    - A smaller batch; MFU shows memory was the bottleneck all along
+  correct: 2
+- source: 44e17c150343
+  question: "`estimate_flops` excludes `wte` and the value embeddings but not `lm_head`, although all three are `(vocab, n_embd)`. Why?"
+  options:
+    - "`wte` and value embeddings are lookups, no multiplies; `lm_head` is a real matmul"
+    - "`lm_head` has more parameters than `wte`, so only it is counted"
+    - Embeddings run in bf16 and `lm_head` in fp32, so only fp32 is counted
+    - "`wte` is tied to `lm_head`, so counting both would double-count"
+  correct: 0
+- source: f99c60c78554
+  question: Attention is about 6% of FLOPs per token at `sequence_len = 256` but about 85% at 32,768. Why, and what does it imply?
+  options:
+    - Attention per token is constant; at long context, optimise the matmuls
+    - Attention per token shrinks with length; at short context, optimise attention
+    - The parameter term grows with length; at long context, shrink `lm_head`
+    - Attention per token grows with context; optimise matmuls when short, attention when long
+  correct: 3

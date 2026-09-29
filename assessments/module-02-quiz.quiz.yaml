@@ -1,0 +1,51 @@
+# Multiple-choice version of the quiz in module-02-quiz.md (question N = question N there).
+# The lesson's model answer is shown as the explanation. `source` fingerprints the original
+# question + answer; if the lesson changes, the site flags the question for review.
+- source: a961125717ff
+  question: A colleague says 'layer 5 transforms the output of layer 4.' Which correction is right, including what `x0_lambdas` adds?
+  options:
+    - Layer 5 replaces the stream; `x0_lambdas` scales each layer's learning rate
+    - Layer 5 reads only layer 4's contribution; `x0_lambdas` skips layers in training
+    - Layer 5 adds to the stream; `x0_lambdas` removes the raw embedding from deep layers
+    - Layer 5 adds to the stream; `x0_lambdas` mixes the original embedding back in at each layer
+  correct: 3
+- source: 2790b513e2a4
+  question: You delete the line that applies rotary embeddings to `q` and `k` and retrain. The loss still falls. What happens?
+  options:
+    - Training diverges at once, because the attention scores become unbounded
+    - Attention becomes order-blind, and the loss plateaus at a visibly worse `val_bpb`
+    - Nothing changes, because the causal mask already encodes position
+    - Position is learned from the value embeddings instead, with the same `val_bpb`
+  correct: 1
+- source: 4f5d52e501b7
+  question: '`window_pattern = "SSSL"`, `n_layer = 8`, `sequence_len = 2048`. Which windows do the layers get, and which layer is the forced exception?'
+  options:
+    - Layers 3 and 7 long (2048), the rest short (1024); the last layer is always forced long
+    - Layers 0 and 4 long (2048), the rest short (1024); the first layer is always forced long
+    - Layers 3 and 7 long (2048), the rest short (512); the first layer is always forced long
+    - All layers long (2048); the pattern applies only when `sequence_len` exceeds 2048
+  correct: 0
+- source: 377d4df1e847
+  question: In `manual_attention` you mask with `float("-inf")`. A colleague suggests `-1e9` 'to avoid NaNs.' Which statement is right?
+  options:
+    - "`-1e9` always differs, because `exp(-1e9)` is not zero in float32"
+    - "`-inf` gives a NaN whenever any single entry in a row is masked"
+    - They agree in practice; `-inf` gives NaN only for a fully masked row, impossible under a causal mask
+    - They agree in float16 but differ in float32; `-inf` gives a NaN at position 0
+  correct: 2
+- source: 824689018f1d
+  question: Rotary embeddings are applied to `q` and `k` but not to `v`. Why, and what would rotating `v` break?
+  options:
+    - Rotating `v` would double the attention FLOPs for no gain in quality
+    - "`v` has a different head dimension, so the rotation would not fit"
+    - Position belongs to what you carry back; rotating `q` and `k` is already redundant
+    - Position belongs to where you look; a rotated `v` returns content altered by where it was found
+  correct: 3
+- source: 042ef93166ee
+  question: RMS norm here has no learned gain. Why does a gain in front of a bias-free linear layer add no expressive power, and does that argument cover `norm(q)` and `norm(k)`?
+  options:
+    - The RMS normalisation cancels the gain; yes, the same holds for QK norm
+    - The linear layer absorbs it by rescaling its columns; no, QK norm has no free matrix downstream
+    - The gain starts at 1 and never learns; yes, for the same reason
+    - The next layer's weight decay removes it; no, because QK norm has no weight decay
+  correct: 1

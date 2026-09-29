@@ -1,0 +1,51 @@
+# Multiple-choice version of the quiz in module-03-quiz.md (question N = question N there).
+# The lesson's model answer is shown as the explanation. `source` fingerprints the original
+# question + answer; if the lesson changes, the site flags the question for review.
+- source: bedf327ac0c6
+  question: At `n_embd = 128`, `n_layer = 2` about 89% of parameters are embedding tables; at `n_embd = 1024`, `n_layer = 24` that share collapses. Why?
+  options:
+    - Embeddings grow with width squared, while block matrices grow linearly
+    - Embeddings shrink with depth, because every layer shares the same table
+    - Embeddings grow linearly with width; block matrices grow with width squared and with depth
+    - Both grow linearly, but block matrices receive a larger learning rate
+  correct: 2
+- source: ede919a926f9
+  question: A colleague removes the two `zeros_` calls in `init_weights`, so `c_proj` starts random like every other matrix. What changes, and why is it worse at 32 layers than at 2?
+  options:
+    - Blocks add random noise at step 0, and over 32 layers it compounds into exploding or vanishing signals
+    - The model starts closer to a good solution, so depth makes no real difference
+    - "`c_proj` can no longer be updated, and deeper models have more of these matrices"
+    - Only the first logged loss changes, which matters more for shallow models than deep ones
+  correct: 0
+- source: 906a82b45160
+  question: "`lm_head` is a separate `(vocab, n_embd)` matrix rather than reusing `wte`. Which does the repo's learning-rate table support?"
+  options:
+    - "Tied: the two are used the same way, and the table gives both `lr = 0.6`"
+    - "Tied: it halves parameters, and the table gives both the same learning rate"
+    - "Untied: tying would double parameters, and the table has no `wte` entry"
+    - "Untied: they are used differently, and the table gives them learning rates 150x apart"
+  correct: 3
+- source: fe5c55d53c34
+  question: Why is `logits.float()` there, when on CPU the model already runs in float32?
+  options:
+    - It fixes a CPU bug where float32 logits overflow in the softmax
+    - It keeps the loss in fp32 when the same code runs under bf16 autocast on a GPU
+    - It converts integer token ids to floats before the loss is computed
+    - "`torch.compile` requires it, because it cannot trace mixed dtypes"
+  correct: 1
+- source: be6b519379ee
+  question: "`softcap = 15`. A colleague raises it to 1000 'since it barely does anything.' What is the largest probability ratio before and after, and is the change safe?"
+  options:
+    - About `e^15` before, `e^1000` after; safe, since the cap is only a numerical guard
+    - About `e^30` before and the same after; safe, since logits never exceed 15
+    - About `e^30` before, practically unbounded after; not clearly safe, as the cap also steadies training
+    - About `e^15` before, `e^2000` after; unsafe, since it always causes NaNs
+  correct: 2
+- source: dcb39165e138
+  question: Greedy decoding on a well-trained model produces 'the the the the'. The model is not broken. What is happening, and which two knobs fix it?
+  options:
+    - Greedy is stuck in a fixed point; temperature adds variety, top-k cuts off the rare tail
+    - The model is overfit; dropout and weight decay fix it at some cost in accuracy
+    - The softcap is too low; raising it and lowering the learning rate fix it
+    - The tokenizer merged 'the'; a larger vocabulary and more BOS tokens fix it
+  correct: 0

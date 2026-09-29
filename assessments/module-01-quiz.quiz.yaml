@@ -1,0 +1,51 @@
+# Multiple-choice version of the quiz in module-01-quiz.md (question N = question N there).
+# The lesson's model answer is shown as the explanation. `source` fingerprints the original
+# question + answer; if the lesson changes, the site flags the question for review.
+- source: 4eeef8d1e10d
+  question: A colleague raises `VOCAB_SIZE` from 8,192 to 32,768 'so the model understands more words.' What gets more expensive, and what number improves without the model being any better?
+  options:
+    - "`wte` shrinks while `lm_head` grows; `val_bpb` falls because tokens get shorter"
+    - Only tokenizer training gets slower; `val_bpb` falls because more words are known
+    - "`lm_head` and the embedding tables grow; loss per token falls because each token covers more bytes"
+    - Attention cost grows with the vocabulary; loss per byte falls because sequences get longer
+  correct: 2
+- source: fcea5663bcd9
+  question: A row has capacity `T + 1 = 257` and the buffer holds documents of length `[300, 180, 90, 40, 12]`. How does the packer build one row?
+  options:
+    - 180, 40, 12, then the first 25 tokens of the 90; the 300 stays in the buffer
+    - 180, 40, 12, then the first 25 tokens of the 300, the longest remaining
+    - 180, 90, then the first 12 tokens of the 40; the 12 waits for the next row
+    - The first 257 tokens of the 300; the rest carries over to the next row
+  correct: 0
+- source: e9f467024688
+  question: Why does `prepare.py` prepend BOS to every *document* rather than to every *row*?
+  options:
+    - BOS per row would make rows unequal in length and break the `(B, T)` rectangle
+    - BOS per document uses fewer tokens overall than BOS per row
+    - The tokenizer can insert BOS only at document starts, never at row starts
+    - A row holds several documents, and per-row BOS would hide every internal boundary
+  correct: 3
+- source: d9eeb3a8b836
+  question: Model A (8k vocabulary) reports a final loss of 3.1 nats/token; model B (64k vocabulary) reports 3.4 nats/token on the same text. Which is better?
+  options:
+    - Model A, because 3.1 is lower than 3.4 nats per token
+    - You can't tell; convert both to bits per byte using each model's bytes per token
+    - Model B, because a larger vocabulary always gives the better model
+    - You can't tell; compare both at the same number of training steps instead
+  correct: 1
+- source: 51055a270458
+  question: Your first logged loss is 6.2, not the expected 9.01. Which pair gives one harmless explanation and one bug?
+  options:
+    - "Harmless: a lucky random seed at init; bug: the learning rate is set far too high"
+    - "Harmless: a smaller vocabulary than configured; bug: the loss EMA was disabled"
+    - "Harmless: the EMA already updated, or a resumed run; bug: `y` equals `x` (targets not shifted)"
+    - "Harmless: bf16 rounding of the first loss; bug: the packer crops the shortest document"
+  correct: 2
+- source: b5c08ec1f0a0
+  question: When nothing fits, the dataloader crops the *shortest* document in the buffer and throws the rest away. Why the shortest, and what would you measure before carrying the remainder over instead?
+  options:
+    - It loses the fewest tokens; first measure how many tokens are actually lost
+    - Short documents are low quality; first measure `val_bpb` with and without them
+    - It keeps rows aligned to documents; first measure memory use per step
+    - BOS placement requires it; first measure tokens per second
+  correct: 0
