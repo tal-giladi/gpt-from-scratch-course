@@ -21,4 +21,5 @@ def capstone_report() -> dict:
                      your own measured noise floor
     """
     # TODO: replace every value with your own experiment's.
+    return {"hypothesis": "decreasing the depth will make the model see each token more, like based on chinchila", "changed": "AR_DEPTH" , "expectation":"lower" , "baseline": "variant" , "repeat": "variant" , "variant": " , "conclusion": "confirmed"}
     raise NotImplementedError

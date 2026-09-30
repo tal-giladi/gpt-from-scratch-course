@@ -16,7 +16,14 @@ def apply_rotary(x, cos, sin):
     cos and sin are (1, T, 1, d) and broadcast on their own.
     """
     # TODO: split, rotate, concatenate.
-    raise NotImplementedError
+    head_dim = x.shape[3]
+    d = head_dim // 2
+    x1 = x[..., :d]
+    x2 = x[..., d:]
+    y1 = x1 * cos + x2 * sin
+    y2 = -x1 * sin + x2 * cos
+    return torch.cat([y1, y2], -1)
+   
 
 
 def rms_norm(x, eps=1e-6):
@@ -26,4 +33,4 @@ def rms_norm(x, eps=1e-6):
     Write the arithmetic; do not call F.rms_norm.
     """
     # TODO: one line with x.pow(2).mean(-1, keepdim=True).
-    raise NotImplementedError
+    return x / torch.sqrt(x.pow(2).mean(-1, keepdim=True) + eps)

@@ -14,4 +14,12 @@ def token_stats(text: str) -> dict:
     """
     # TODO: encode the text, count tokens and utf-8 bytes, compute the ratio,
     # and check that decoding the ids gives the original string back.
+    tok = tokenizer()
+    ids = tok.encode(text)
+    n_tokens = len(ids)
+    n_bytes = len(text.encode("utf-8"))
+    r = tok.decode(ids) == text
+
+    return {"n_tokens": n_tokens, "n_bytes": n_bytes, "bytes_per_token": 0 if n_tokens == 0 else float(n_bytes)/float(n_tokens), "roundtrip": r}
     raise NotImplementedError
+

@@ -18,5 +18,19 @@ def residual_stream(model, idx):
     cos_sin is (model.cos[:, :T], model.sin[:, :T]) and window_size is
     model.window_sizes[i].
     """
-    # TODO: build the list described above. norm() is train_defs().norm.
-    raise NotImplementedError
+    
+    x = model.transformer.wte(idx)
+    x = train_defs().norm(x)	
+    x0 = x
+    T = idx.size(1)
+    cos_sin = (model.cos[:, :T], model.sin[:, :T])
+    result = [x]
+    for i, block in enumerate(model.transformer.h):
+        x = model.resid_lambdas[i] * x + model.x0_lambdas[i] * x0
+        ve = model.value_embeds[str(i)](idx) if str(i) in model.value_embeds else None
+        window_size = model.window_sizes[i]
+        
+        
+        x = block(x, ve, cos_sin, window_size)
+        result.append(x)
+    return result

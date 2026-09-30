@@ -11,7 +11,17 @@ def window_mask(T, window):
     Write it yourself; do not import _causal_window_mask.
     """
     # TODO: one arange, one difference, two conditions.
-    raise NotImplementedError
+    mask = torch.ones((T, T), dtype = torch.bool)
+    for i in range (0, T): #the upper triangle
+        for j in range (i + 1, T):
+            
+            mask[i][j] = False
+    for i in range(0, T):
+        for j in range (0, T):
+            if i-j>window:
+                mask[i][j] = False
+    print(mask)   
+    return mask
 
 
 def mask_memory_bytes(B, n_head, T, bytes_per_element=4):
@@ -19,4 +29,5 @@ def mask_memory_bytes(B, n_head, T, bytes_per_element=4):
     forces it onto the general math kernel: B * n_head * T * T elements.
     """
     # TODO: multiply out and return an int.
+    return B * n_head * T * T * bytes_per_element
     raise NotImplementedError

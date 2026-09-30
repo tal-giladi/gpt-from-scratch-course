@@ -12,7 +12,15 @@ def lr_multiplier(progress, warmup=0.0, warmdown=0.5, final_frac=0.0):
     - after that:                linear from 1.0 down to `final_frac` at progress 1
     """
     # TODO: three branches, and do not divide by a zero warmup.
-    raise NotImplementedError
+    lr = 0.0
+    if progress < warmup:
+        lr = (progress / warmup) if warmup>0 else 1.0
+    elif progress < (1.0 - warmdown):
+        lr = 1.0
+    else:
+        cooldown = (1.0 - progress) / warmdown
+        lr = cooldown * 1.0 + (1 - cooldown) * final_frac
+    return lr
 
 
 def accumulated_grad_norm(model, x, y, micro_batches):
@@ -24,4 +32,13 @@ def accumulated_grad_norm(model, x, y, micro_batches):
     forward+backward on the whole batch would have produced.
     """
     # TODO: zero once, loop over chunks, divide the loss, backward, then measure.
-    raise NotImplementedError
+    model.zero_grad()
+    x_chunks = torch.chunk(x, micro_batches, dim=0)
+    y_chunks = torch.chunk(y, micro_batches, dim=0)
+    for x_mb, y_mb in zip(x_chunks, y_chunks):
+        loss = model(x_mb, y_mb)
+        loss = loss / micro_batches
+        loss.backward()
+        
+    norm = sum(p.grad.pow(2).sum() for p in model.parameters() if p.grad is not None).sqrt().item()
+    return norm

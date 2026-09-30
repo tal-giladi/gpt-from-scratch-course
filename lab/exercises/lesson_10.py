@@ -16,4 +16,15 @@ def grad_report(model, x, y) -> dict:
     Clear old gradients first, so calling this twice gives the same answer.
     """
     # TODO: zero_grad, forward, backward, then measure.
-    raise NotImplementedError
+    model.zero_grad(set_to_none = True)
+    loss = model(x,y)
+    loss.backward()
+  
+    n_with_grad = sum(p.grad is not None for p in model.parameters())
+    n_params = sum(1 for p in model.parameters())
+    grad_norm = sum(
+        (p.grad.norm() ** 2)
+        for p in model.parameters()
+        if p.grad is not None  
+    ).sqrt().item()
+    return {"loss": loss, "grad_norm": grad_norm, "n_with_grad": n_with_grad, "n_params": n_params}

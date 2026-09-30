@@ -13,6 +13,10 @@ def mlp_forward(mlp, x):
     both callable nn.Linear layers with no bias.
     """
     # TODO: three lines.
+    x = mlp.c_fc(x)
+    x = torch.relu(x).square()
+    x = mlp.c_proj(x)
+    return x
     raise NotImplementedError
 
 
@@ -25,4 +29,8 @@ def block_forward(block, x, ve, cos_sin, window_size):
     Use block.attn and block.mlp; norm is train_defs().norm.
     """
     # TODO: two residual additions, pre-norm on the way in.
+    norm = train_defs().norm
+    x = x + block.attn(norm(x), ve, cos_sin, window_size)
+    x = x + block.mlp(norm(x))
+    return x
     raise NotImplementedError

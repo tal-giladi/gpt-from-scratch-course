@@ -17,6 +17,22 @@ def manual_attention(q, k, v, window):
     No F.scaled_dot_product_attention - the point is to write the four lines:
     scaled scores, mask, softmax, weighted sum of values.
     """
+   
     # TODO: transpose to (B, n_head, T, head_dim), score, mask, softmax,
-    # multiply by v, transpose back.
-    raise NotImplementedError
+    head_dim = q.shape[-1]
+    T = q.shape[1]
+    k = k.transpose(1,2)
+    q = q.transpose(1,2)
+    
+    k = k.transpose(2,3)
+    scores = (q @ k) / math.sqrt(head_dim)
+    positions = torch.arange(T)
+    delta = positions[:, None] - positions[None, :]
+    masked = (delta < 0) | (delta > window)
+   # scores[masked] = -float("inf")
+    scores = scores.masked_fill(masked, -float("inf"))
+    attn = torch.softmax(scores, dim=-1)
+    v = v.transpose(1,2)
+    out = attn @ v
+    return out.transpose(1,2)
+    

@@ -11,7 +11,7 @@ def split_row(row):
     or a 1-D tensor - use slicing only, do not convert types.
     """
     # TODO: return the row without its last element, and without its first.
-    raise NotImplementedError
+    return row[:-1], row[1:]
 
 
 def uniform_loss(vocab_size: int) -> float:
@@ -19,7 +19,7 @@ def uniform_loss(vocab_size: int) -> float:
     token in the vocabulary - i.e. the loss you should see at step 0.
     """
     # TODO: one call to math.log.
-    raise NotImplementedError
+    return math.log(vocab_size)
 
 
 def bits_per_byte(total_nats: float, total_bytes: int) -> float:
@@ -29,4 +29,6 @@ def bits_per_byte(total_nats: float, total_bytes: int) -> float:
     Return float("inf") when total_bytes is 0.
     """
     # TODO: nats -> bits is a division by ln(2); then divide by the bytes.
-    raise NotImplementedError
+    if total_bytes == 0:
+        return float('inf')
+    return total_nats / (math.log(2) * total_bytes)

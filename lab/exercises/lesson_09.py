@@ -13,7 +13,18 @@ def next_token_probs(model, idx, temperature=1.0, top_k=None):
 
     top_k=None means no filtering.
     """
-    # TODO: last position, temperature, top-k mask, softmax - in that order.
+    logits = model(idx)
+    logits = logits[:, -1, :]
+    logits = logits / temperature
+    if top_k is not None:
+        values, _ = torch.topk(logits, k = top_k, dim = -1)
+        threshold = values[:, -1].unsqueeze(-1)
+        mask = logits >= threshold
+        logits = logits.masked_fill(~mask, float("-inf"))
+        
+    logits = torch.softmax(logits, dim=-1)
+  
+    return logits
     raise NotImplementedError
 
 
@@ -24,4 +35,16 @@ def greedy_generate(model, ids, n_new):
     Never feed the model more than model.config.sequence_len tokens.
     """
     # TODO: loop n_new times, argmax the distribution, append.
+    B = 1
+    
+    ids = ids.copy()
+    for i in range(n_new):
+        
+        data = torch.tensor(ids).unsqueeze(0)
+        data = data[:, -model.config.sequence_len:]
+        probs  = next_token_probs(model, data)
+        next_token = probs.argmax(dim = -1)
+        ids.append(next_token.item())
+
+    return ids
     raise NotImplementedError

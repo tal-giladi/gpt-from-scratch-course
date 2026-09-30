@@ -14,4 +14,10 @@ def budget_report(model, seconds, flops_per_second):
                            have been compute-optimal for
     """
     # TODO: five numbers, plain Python types.
+    params = sum(p.numel() for p in model.parameters())
+    flops_per_token = model.estimate_flops()
+    tokens = int(flops_per_second * seconds / flops_per_token)
+    tokens_per_param = tokens / params
+    chinchilla_params = tokens / 20
+    return {"params" : params, "flops_per_token": flops_per_token, "tokens": tokens, "tokens_per_param": tokens_per_param, "chinchilla_params": chinchilla_params}
     raise NotImplementedError
